@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ProductCard extends StatelessWidget {
-  final String imageUrl;
+  final String? imageUrl;
   final String title;
   final String price;
   final String? weight;
@@ -39,20 +39,29 @@ class ProductCard extends StatelessWidget {
               height: 120,
               width: double.infinity,
               color: Colors.grey[300],
-              child: Image.asset(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey[300],
-                    child: Icon(
-                      Icons.image,
-                      size: 50,
-                      color: Colors.grey[500],
+              child: imageUrl == null
+                  ? Container(
+                      color: Colors.grey[300],
+                      child: Icon(
+                        Icons.image,
+                        size: 50,
+                        color: Colors.grey[500],
+                      ),
+                    )
+                  : Image.asset(
+                      imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: Icon(
+                            Icons.image,
+                            size: 50,
+                            color: Colors.grey[500],
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ),
           

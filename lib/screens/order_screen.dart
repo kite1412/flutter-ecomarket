@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/mock_store.dart';
 
 class OrderScreen extends StatelessWidget {
   const OrderScreen({super.key});
@@ -43,7 +44,7 @@ class OrderScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // Filter Tabs
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -60,78 +61,41 @@ class OrderScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            
-            // Order List
+
+            // Order List (from MockStore)
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _buildOrderCard(
-                    orderId: '#ORD1234',
-                    storeName: 'Botol Plastik PET Bersih',
-                    date: '2 Des, 2024',
-                    weight: '',
-                    status: 'Selesai',
-                    statusColor: Colors.yellow[700]!,
-                    price: 'Rp 15.000',
-                    icon: Icons.recycling,
-                    iconBg: Colors.orange[100]!,
-                    iconColor: Colors.orange[700]!,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOrderCard(
-                    orderId: '#ORD1235',
-                    storeName: 'Kardus Bekas untuk daur',
-                    date: '5 Des, 2024',
-                    weight: 'Lihat Detail',
-                    status: 'Sedang diproses',
-                    statusColor: Colors.green[600]!,
-                    price: 'Rp 12.000',
-                    icon: Icons.description,
-                    iconBg: Colors.blue[100]!,
-                    iconColor: Colors.blue[700]!,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOrderCard(
-                    orderId: '#ORD1236',
-                    storeName: 'Kardus Bekas Kondisi Bagus',
-                    date: '7 Des, 2024',
-                    weight: '',
-                    status: 'Belum dibayar',
-                    statusColor: Colors.red[400]!,
-                    price: 'Rp 45.000',
-                    icon: Icons.description,
-                    iconBg: Colors.purple[100]!,
-                    iconColor: Colors.purple[700]!,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOrderCard(
-                    orderId: '#ORD1237',
-                    storeName: 'Kaleng Alumunium',
-                    date: '9 Des, 2024',
-                    weight: '',
-                    status: 'Sedang diproses',
-                    statusColor: Colors.green[600]!,
-                    price: 'Rp 30.000',
-                    icon: Icons.recycling,
-                    iconBg: Colors.orange[100]!,
-                    iconColor: Colors.orange[700]!,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOrderCard(
-                    orderId: '#ORD1238',
-                    storeName: 'Botol Kaca Campur',
-                    date: '12 Des, 2024',
-                    weight: 'Lihat Detail',
-                    status: 'Menunggu',
-                    statusColor: Colors.red[400]!,
-                    price: 'Rp 100.000',
-                    icon: Icons.wine_bar_outlined,
-                    iconBg: Colors.teal[100]!,
-                    iconColor: Colors.teal[700]!,
-                  ),
-                  const SizedBox(height: 100),
-                ],
+              child: ValueListenableBuilder<List<Map<String, dynamic>>>(
+                valueListenable: MockStore.instance.orders,
+                builder: (context, orders, _) {
+                  if (orders.isEmpty) {
+                    return Center(child: Text('Belum ada pesanan.'));
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: orders.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final o = orders[index];
+                      final statusColor = Color(o['statusColor'] ?? Colors.grey.value);
+                      final icon = IconData(o['icon'] ?? Icons.recycling.codePoint, fontFamily: 'MaterialIcons');
+                      final iconBg = Color(o['iconBg'] ?? Colors.grey[100]!.value);
+                      final iconColor = Color(o['iconColor'] ?? Colors.grey[700]!.value);
+
+                      return _buildOrderCard(
+                        orderId: o['orderId'] ?? '',
+                        storeName: o['storeName'] ?? '',
+                        date: o['date']?.toString().split('T').first ?? '',
+                        weight: o['weight'] ?? '',
+                        status: o['status'] ?? '',
+                        statusColor: statusColor,
+                        price: o['price'] ?? '',
+                        icon: icon,
+                        iconBg: iconBg,
+                        iconColor: iconColor,
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ],

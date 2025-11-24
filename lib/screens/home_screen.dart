@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../widgets/category_card.dart';
 import '../widgets/product_card.dart';
+import '../services/mock_store.dart';
+import 'product_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -299,41 +301,50 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               
-              // Product Grid
+              // Product Grid (shows mock store products)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.75,
-                  children: [
-                    ProductCard(
-                      imageUrl: 'assets/images/product1.jpg',
-                      title: 'Botol Plastik Bekas 5kg',
-                      price: 'Rp 15.000',
-                    ),
-                    ProductCard(
-                      imageUrl: 'assets/images/product2.jpg',
-                      title: 'Kardus Bekas Kondisi Baik',
-                      price: 'Rp 45.000',
-                      weight: '10 Kg',
-                    ),
-                    ProductCard(
-                      imageUrl: 'assets/images/product3.jpg',
-                      title: 'Kaleng Bekas(Art) 20kg',
-                      price: 'Rp 70.000',
-                      weight: '10 Kg',
-                    ),
-                    ProductCard(
-                      imageUrl: 'assets/images/product4.jpg',
-                      title: 'Botol Kaca Campur',
-                      price: 'Rp 100.000',
-                      weight: '30 Kg',
-                    ),
-                  ],
+                child: ValueListenableBuilder<List<Map<String, dynamic>>>(
+                  valueListenable: MockStore.instance.products,
+                  builder: (context, products, _) {
+                    if (products.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: const Center(child: Text('Belum ada produk. Tambah produk baru dari halaman Jual Sampah.')),
+                      );
+                    }
+
+                    return GridView.builder(
+                      itemCount: products.length,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.75,
+                      ),
+                      itemBuilder: (context, index) {
+                        final p = products[index];
+                          return InkWell(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ProductDetailScreen(product: p),
+                                ),
+                              );
+                            },
+                            child: ProductCard(
+                              imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
+                              title: p['title'] ?? '',
+                              price: p['price'] != null && p['price'].toString().isNotEmpty ? '${p['price']}' : '0',
+                              weight: p['weight'] != null ? p['weight'].toString() : null,
+                            ),
+                          );
+                      },
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 20),

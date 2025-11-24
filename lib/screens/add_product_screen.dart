@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/mock_store.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -60,22 +61,26 @@ class _AddProductScreenState extends State<AddProductScreen> {
     if (_formKey.currentState!.validate()) {
       // Validasi minimal 3 foto
       final uploadedImages = _images.where((img) => img != null).length;
-      if (uploadedImages < 3) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tambahkan minimal 3 foto produk'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
 
-      // Proses posting iklan
+      // Add a mock product into the in-memory store
+      final product = {
+        'title': _nameController.text.trim(),
+        'category': _selectedCategory ?? 'Plastik',
+        'weight': _weightController.text.trim(),
+        'price': _priceController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'address': _addressController.text.trim(),
+        'images': _images.where((i) => i != null).toList(),
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      MockStore.instance.addProduct(product);
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Berhasil!'),
-          content: const Text('Iklan Anda berhasil diposting'),
+          content: const Text('Iklan Anda berhasil diposting (mock)'),
           actions: [
             TextButton(
               onPressed: () {
@@ -175,7 +180,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Tambahkan minimal 3 foto produk',
+                        'Tambahkan foto produk (opsional)',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
