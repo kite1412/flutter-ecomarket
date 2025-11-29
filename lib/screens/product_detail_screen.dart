@@ -440,6 +440,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         'buyer_id': buyerId,
                         'item_id': itemId,
                         'price': total,
+                        'quantity': _quantity,
                         // omit status & created_at to use defaults ('completed')
                       });
                     } catch (_) {}
