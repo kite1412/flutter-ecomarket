@@ -4,14 +4,14 @@ class ProductCard extends StatelessWidget {
   final String? imageUrl;
   final String title;
   final String price;
-  final String? weight;
+  final String? subtitle;
 
   const ProductCard({
     super.key,
     required this.imageUrl,
     required this.title,
     required this.price,
-    this.weight,
+    this.subtitle,
   });
 
   @override
@@ -89,10 +89,10 @@ class ProductCard extends StatelessWidget {
                     color: Colors.green[700],
                   ),
                 ),
-                if (weight != null) ...[
+                if (subtitle != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    weight!,
+                    subtitle!,
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],

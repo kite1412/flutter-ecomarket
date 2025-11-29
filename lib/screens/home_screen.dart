@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/category_card.dart';
 import '../widgets/product_card.dart';
 import '../services/mock_store.dart';
+import '../services/local_db.dart';
 import 'product_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -301,47 +302,58 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               
-              // Product Grid (shows mock store products)
+              // Product Grid (loads from local DB and refreshes when MockStore changes)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ValueListenableBuilder<List<Map<String, dynamic>>>(
                   valueListenable: MockStore.instance.products,
-                  builder: (context, products, _) {
-                    if (products.isEmpty) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: const Center(child: Text('Belum ada produk. Tambah produk baru dari halaman Jual Sampah.')),
-                      );
-                    }
-
-                    return GridView.builder(
-                      itemCount: products.length,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 0.75,
-                      ),
-                      itemBuilder: (context, index) {
-                        final p = products[index];
-                          return InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ProductDetailScreen(product: p),
-                                ),
-                              );
-                            },
-                            child: ProductCard(
-                              imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
-                              title: p['title'] ?? '',
-                              price: p['price'] != null && p['price'].toString().isNotEmpty ? '${p['price']}' : '0',
-                              weight: p['weight'] != null ? p['weight'].toString() : null,
-                            ),
+                  builder: (context, _, __) {
+                    return FutureBuilder<List<Map<String, dynamic>>>(
+                      future: LocalDb.instance.listItems(),
+                      builder: (context, snap) {
+                        final products = snap.data ?? [];
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(child: CircularProgressIndicator()),
                           );
+                        }
+                        if (products.isEmpty) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: const Center(child: Text('Belum ada produk. Tambah produk baru dari halaman Jual Sampah.')),
+                          );
+                        }
+                        return GridView.builder(
+                          itemCount: products.length,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 0.75,
+                          ),
+                          itemBuilder: (context, index) {
+                            final p = products[index];
+                            return InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ProductDetailScreen(product: p),
+                                  ),
+                                );
+                              },
+                              child: ProductCard(
+                                imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
+                                title: p['title'] ?? '',
+                                price: p['price'] != null && p['price'].toString().isNotEmpty ? '${p['price']}' : '0',
+                                subtitle: (p['category'] != null ? '${p['category']}' : '') + (p['condition'] != null ? ' · ${p['condition']}' : ''),
+                              ),
+                            );
+                          },
+                        );
                       },
                     );
                   },

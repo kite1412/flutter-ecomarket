@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/mock_store.dart';
+import '../services/local_db.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -15,12 +16,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _weightController = TextEditingController();
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _addressController = TextEditingController();
+  // Removed address/location for local DB-only implementation
 
   String? _selectedCategory;
-  final List<String> _categories = ['Plastik', 'Kertas', 'Kaca', 'Logam'];
+  final List<String> _categories = ['Plastik', 'Kertas', 'Elektronik', 'Logam'];
+  String? _selectedCondition;
+  final List<String> _conditions = [
+    'Baru',
+    'Sangat bagus',
+    'Bagus',
+    'Layak pakai',
+    'Rusak ringan',
+    'Rusak berat',
+  ];
   
-  final List<String?> _images = [null, null, null, null];
+  String? _imageUrl; // Single optional image URL
 
   @override
   void dispose() {
@@ -28,7 +38,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _weightController.dispose();
     _priceController.dispose();
     _descriptionController.dispose();
-    _addressController.dispose();
+    // address controller removed
     super.dispose();
   }
 
@@ -37,61 +47,59 @@ class _AddProductScreenState extends State<AddProductScreen> {
     // Dalam implementasi nyata, gunakan image_picker package
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Fitur upload foto akan menggunakan image_picker package'),
+        content: Text('Upload satu foto (opsional) akan ditambahkan nanti'),
         duration: Duration(seconds: 2),
       ),
     );
   }
 
-  void _useCurrentLocation() {
-    // Simulasi penggunaan lokasi saat ini
-    // Dalam implementasi nyata, gunakan geolocator package
-    setState(() {
-      _addressController.text = 'Jl. Contoh No. 123, Jakarta Selatan';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Lokasi berhasil digunakan'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
+  // Location section removed
 
-  void _submitForm() {
+  Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
-      // Validasi minimal 3 foto
-      final uploadedImages = _images.where((img) => img != null).length;
-
-      // Add a mock product into the in-memory store
-      final product = {
+      final nowIso = DateTime.now().toIso8601String();
+      final item = {
+        'user_id': MockStore.instance.currentUser.value?['id'],
         'title': _nameController.text.trim(),
-        'category': _selectedCategory ?? 'Plastik',
-        'weight': _weightController.text.trim(),
-        'price': _priceController.text.trim(),
         'description': _descriptionController.text.trim(),
-        'address': _addressController.text.trim(),
-        'images': _images.where((i) => i != null).toList(),
-        'created_at': DateTime.now().toIso8601String(),
+        'category': _selectedCategory ?? 'Plastik',
+        'condition': _selectedCondition ?? 'Bagus',
+        'weight_kg': double.tryParse(_weightController.text.trim()) ?? 0,
+        'price': double.tryParse(_priceController.text.trim()) ?? 0,
+        'status': 'available',
+        'created_at': nowIso,
       };
 
-      MockStore.instance.addProduct(product);
+      try {
+        final itemId = await LocalDb.instance.insertItem(item);
+        final localProduct = {
+          'id': itemId,
+          ...item,
+          'images': _imageUrl != null ? [_imageUrl] : [],
+        };
+        MockStore.instance.addProduct(localProduct);
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Berhasil!'),
-          content: const Text('Iklan Anda berhasil diposting (mock)'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Berhasil!'),
+            content: const Text('Iklan Anda berhasil diposting.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan produk: $e')),
+        );
+      }
     }
   }
 
@@ -169,7 +177,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         height: 100,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
-                          itemCount: 4,
+                          itemCount: 1,
                           itemBuilder: (context, index) {
                             return Padding(
                               padding: const EdgeInsets.only(right: 12),
@@ -180,7 +188,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Tambahkan foto produk (opsional)',
+                        'Tambahkan 1 foto produk (opsional)',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -273,6 +281,52 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Kategori harus dipilih';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Kondisi
+                      const Text(
+                        'Kondisi',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _selectedCondition,
+                        decoration: InputDecoration(
+                          hintText: 'Pilih kondisi',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        items: _conditions.map((c) {
+                          return DropdownMenuItem(
+                            value: c,
+                            child: Text(c),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedCondition = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Kondisi harus dipilih';
                           }
                           return null;
                         },
@@ -406,69 +460,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Lokasi Pengambilan Section
-                      const Text(
-                        'Lokasi Pengambilan',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Alamat Lengkap
-                      const Text(
-                        'Alamat Lengkap',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _addressController,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          hintText: 'Masukkan alamat lengkap...',
-                          hintStyle: TextStyle(color: Colors.grey[400]),
-                          filled: true,
-                          fillColor: Colors.grey[100],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.all(16),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Alamat harus diisi';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Gunakan Lokasi Saat Ini Button
-                      OutlinedButton.icon(
-                        onPressed: _useCurrentLocation,
-                        icon: const Icon(Icons.location_on_outlined),
-                        label: const Text('Gunakan Lokasi Saat Ini'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.green[700],
-                          side: BorderSide(color: Colors.green[700]!),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
+                      // Lokasi section removed
 
                       // Saran Harga Info Box
                       Container(
@@ -587,7 +579,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             width: 1,
           ),
         ),
-        child: _images[index] == null
+        child: _imageUrl == null
             ? Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -598,7 +590,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    index == 0 ? 'Tambah' : '',
+                    'Tambah',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -611,7 +603,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      _images[index]!,
+                      _imageUrl!,
                       width: 100,
                       height: 100,
                       fit: BoxFit.cover,
@@ -623,7 +615,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     child: GestureDetector(
                       onTap: () {
                         setState(() {
-                          _images[index] = null;
+                          _imageUrl = null;
                         });
                       },
                       child: Container(
