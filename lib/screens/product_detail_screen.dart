@@ -52,7 +52,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final images = product['images'] as List? ?? [];
-    final imageUrl = images.isNotEmpty ? images.first as String? : null;
+    final imageUrl = images.isNotEmpty
+      ? images.first as String?
+      : (product['image_path']?.toString());
     final title = product['title'] ?? '';
     final price = product['price'];
     final weight = product['weight_kg'] ?? product['weight'] ?? '';

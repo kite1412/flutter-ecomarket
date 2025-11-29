@@ -9,8 +9,17 @@ class MockStore {
       ValueNotifier<List<Map<String, dynamic>>>([]);
 
   void addProduct(Map<String, dynamic> product) {
+    // Normalize image fields to avoid UI drift
+    final normalized = Map<String, dynamic>.from(product);
+    final ip = normalized['image_path'];
+    final imgs = normalized['images'];
+    if (ip is String && ip.isNotEmpty) {
+      normalized['images'] = [ip];
+    } else if (imgs is List && imgs.isNotEmpty && imgs.first is String) {
+      normalized['image_path'] = imgs.first as String;
+    }
     final copy = List<Map<String, dynamic>>.from(products.value);
-    copy.insert(0, product);
+    copy.insert(0, normalized);
     products.value = copy;
   }
 
@@ -18,7 +27,16 @@ class MockStore {
     final copy = List<Map<String, dynamic>>.from(products.value);
     final idx = copy.indexWhere((p) => p['id'] == id);
     if (idx != -1) {
-      copy[idx] = {...copy[idx], ...fields};
+      // Normalize image fields on updates as well
+      final normalized = Map<String, dynamic>.from(fields);
+      final ip = normalized['image_path'];
+      final imgs = normalized['images'];
+      if (ip is String && ip.isNotEmpty) {
+        normalized['images'] = [ip];
+      } else if (imgs is List && imgs.isNotEmpty && imgs.first is String) {
+        normalized['image_path'] = imgs.first as String;
+      }
+      copy[idx] = {...copy[idx], ...normalized};
       products.value = copy;
     }
   }

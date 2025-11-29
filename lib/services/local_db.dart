@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
@@ -7,6 +8,11 @@ class LocalDb {
   LocalDb._();
 
   Database? _db;
+  // Notifies listeners whenever items table mutates
+  final ValueNotifier<int> itemsRevision = ValueNotifier<int>(0);
+  void _bumpItemsRevision() {
+    try { itemsRevision.value = itemsRevision.value + 1; } catch (_) {}
+  }
   Future<Database> get db async {
     if (_db != null) return _db!;
     _db = await _open();
@@ -180,7 +186,9 @@ class LocalDb {
   // Items
   Future<int> insertItem(Map<String, dynamic> item) async {
     final database = await db;
-    return database.insert('items', item);
+    final id = await database.insert('items', item);
+    _bumpItemsRevision();
+    return id;
   }
 
   Future<Map<String, dynamic>?> getItem(int id) async {
@@ -222,12 +230,16 @@ class LocalDb {
 
   Future<int> updateItem(int id, Map<String, dynamic> fields) async {
     final database = await db;
-    return database.update('items', fields, where: 'id = ?', whereArgs: [id]);
+    final count = await database.update('items', fields, where: 'id = ?', whereArgs: [id]);
+    if (count > 0) _bumpItemsRevision();
+    return count;
   }
 
   Future<int> deleteItem(int id) async {
     final database = await db;
-    return database.delete('items', where: 'id = ?', whereArgs: [id]);
+    final count = await database.delete('items', where: 'id = ?', whereArgs: [id]);
+    if (count > 0) _bumpItemsRevision();
+    return count;
   }
 
   // Transactions

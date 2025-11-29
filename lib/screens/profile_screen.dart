@@ -170,6 +170,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // --- Stats helpers ---
+  double _asDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  }
+
+  int _asInt(dynamic v) {
+    if (v is int) return v;
+    return int.tryParse(v?.toString() ?? '') ?? 0;
+  }
+
+  String _fmtWeight(num kg) {
+    if (kg >= 1000) {
+      final ton = kg / 1000.0;
+      return '${ton.toStringAsFixed(1)} Ton';
+    }
+    // Show without decimals when integer
+    final isInt = kg.roundToDouble() == kg;
+    final str = isInt ? kg.toInt().toString() : kg.toStringAsFixed(1);
+    return '${str}Kg';
+  }
+
+  Future<Map<String, dynamic>> _loadStats() async {
+    final current = MockStore.instance.currentUser.value;
+    final int? userId = current != null && current['id'] is int ? current['id'] as int : null;
+
+    final allItems = await LocalDb.instance.listItems();
+    final myItems = userId != null ? await LocalDb.instance.listItems(userId: userId) : <Map<String, dynamic>>[];
+
+    double totalAllKg = 0.0;
+    for (final it in allItems) {
+      final w = it.containsKey('weight_kg') ? _asDouble(it['weight_kg']) : _asDouble(it['weight']);
+      final q = _asInt(it['quantity']);
+      totalAllKg += (w * (q <= 0 ? 1 : q));
+    }
+
+    double totalMyKg = 0.0;
+    for (final it in myItems) {
+      final w = it.containsKey('weight_kg') ? _asDouble(it['weight_kg']) : _asDouble(it['weight']);
+      final q = _asInt(it['quantity']);
+      totalMyKg += (w * (q <= 0 ? 1 : q));
+    }
+
+    return {
+      'myCount': myItems.length,
+      'allKg': totalAllKg,
+      'myKg': totalMyKg,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -250,35 +300,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 20),
               
-              // Stats Cards
+              // Stats Cards (dynamic)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        '245',
-                        'Total Items',
-                        Icons.inventory_2_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildStatCard(
-                        '1.2 Ton',
-                        'Sampah terkait',
-                        Icons.recycling,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildStatCard(
-                        '850Kg',
-                        'Total',
-                        Icons.eco,
-                      ),
-                    ),
-                  ],
+                child: FutureBuilder<Map<String, dynamic>>(
+                  future: _loadStats(),
+                  builder: (context, snap) {
+                    final myCount = snap.data != null ? snap.data!['myCount'] as int : 0;
+                    final allKg = snap.data != null ? (snap.data!['allKg'] as double) : 0.0;
+                    final myKg = snap.data != null ? (snap.data!['myKg'] as double) : 0.0;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard(
+                            '$myCount',
+                            'Total Items',
+                            Icons.inventory_2_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            _fmtWeight(allKg),
+                            'Sampah terkait',
+                            Icons.recycling,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            _fmtWeight(myKg),
+                            'Total',
+                            Icons.eco,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 24),
@@ -300,13 +358,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: Column(
                   children: [
-                    _buildMenuItem(
-                      icon: Icons.access_time,
-                      title: 'Riwayat Daur',
-                      iconColor: Colors.green[700]!,
-                      iconBg: Colors.green[50]!,
-                    ),
-                    _buildDivider(),
                     // Alamat + Balance
                     FutureBuilder<Map<String, dynamic>?>(
                       future: () async {
