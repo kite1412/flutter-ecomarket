@@ -340,27 +340,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   children: [
                     _buildMenuItem(
-                      icon: Icons.settings_outlined,
-                      title: 'Pengaturan Akun',
-                      iconColor: Colors.grey[700]!,
-                      iconBg: Colors.grey[100]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
-                      icon: Icons.help_outline,
-                      title: 'Pusat Bantuan',
-                      iconColor: Colors.grey[700]!,
-                      iconBg: Colors.grey[100]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
-                      icon: Icons.description_outlined,
-                      title: 'Ketentuan & Privasi',
-                      iconColor: Colors.grey[700]!,
-                      iconBg: Colors.grey[100]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
                       icon: Icons.logout,
                       title: 'Keluar',
                       iconColor: Colors.red[700]!,
