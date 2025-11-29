@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import '../services/mock_store.dart';
+import '../services/local_db.dart';
 
 class AddProductScreen extends StatefulWidget {
-  const AddProductScreen({super.key});
+  final Map<String, dynamic>? product; // optional existing product for edit
+  const AddProductScreen({Key? key, this.product}) : super(key: key);
 
   @override
   State<AddProductScreen> createState() => _AddProductScreenState();
@@ -12,80 +17,155 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _weightController = TextEditingController();
+  final _quantityController = TextEditingController(text: '1');
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _addressController = TextEditingController();
+  // Removed address/location for local DB-only implementation
 
   String? _selectedCategory;
-  final List<String> _categories = ['Plastik', 'Kertas', 'Kaca', 'Logam'];
+  final List<String> _categories = ['Plastik', 'Kertas', 'Elektronik', 'Logam'];
+  String? _selectedCondition;
+  bool get _isEditing => widget.product != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefill controllers if editing
+    final existing = widget.product;
+    if (existing != null) {
+      _nameController.text = existing['title']?.toString() ?? '';
+      _descriptionController.text = existing['description']?.toString() ?? '';
+      _weightController.text = (existing['weight_kg']?.toString() ?? existing['weight']?.toString() ?? '');
+      _quantityController.text = existing['quantity']?.toString() ?? '1';
+      _priceController.text = existing['price']?.toString() ?? '';
+      _selectedCategory = existing['category']?.toString();
+      _selectedCondition = existing['condition']?.toString();
+      final imgs = existing['images'];
+      if (imgs is List && imgs.isNotEmpty) {
+        _imageUrl = imgs.first?.toString();
+      } else if (existing['image_path'] != null) {
+        _imageUrl = existing['image_path']?.toString();
+      }
+    }
+  }
+
+  final List<String> _conditions = [
+    'Baru',
+    'Sangat bagus',
+    'Bagus',
+    'Layak pakai',
+    'Rusak ringan',
+    'Rusak berat',
+  ];
   
-  final List<String?> _images = [null, null, null, null];
+  String? _imageUrl; // Single optional image URL
 
   @override
   void dispose() {
     _nameController.dispose();
     _weightController.dispose();
+    _quantityController.dispose();
     _priceController.dispose();
     _descriptionController.dispose();
-    _addressController.dispose();
+    // address controller removed
     super.dispose();
   }
 
-  void _addImage(int index) {
-    // Simulasi pemilihan gambar
-    // Dalam implementasi nyata, gunakan image_picker package
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fitur upload foto akan menggunakan image_picker package'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+  Future<void> _addImage(int index) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1280, maxHeight: 1280, imageQuality: 85);
+      if (picked != null) {
+        setState(() {
+          _imageUrl = picked.path; // store local file path
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memilih gambar: $e')));
+    }
   }
 
-  void _useCurrentLocation() {
-    // Simulasi penggunaan lokasi saat ini
-    // Dalam implementasi nyata, gunakan geolocator package
-    setState(() {
-      _addressController.text = 'Jl. Contoh No. 123, Jakarta Selatan';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Lokasi berhasil digunakan'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
+  // Location section removed
 
-  void _submitForm() {
-    if (_formKey.currentState!.validate()) {
-      // Validasi minimal 3 foto
-      final uploadedImages = _images.where((img) => img != null).length;
-      if (uploadedImages < 3) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tambahkan minimal 3 foto produk'),
-            backgroundColor: Colors.red,
+  Future<void> _submitForm() async {
+    if (!_formKey.currentState!.validate()) return;
+    final baseFields = {
+      'title': _nameController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'category': _selectedCategory ?? 'Plastik',
+      'condition': _selectedCondition ?? 'Bagus',
+      'weight_kg': double.tryParse(_weightController.text.trim()) ?? 0,
+      'quantity': int.tryParse(_quantityController.text.trim()) ?? 1,
+      'price': double.tryParse(_priceController.text.trim()) ?? 0,
+    };
+    try {
+      if (_isEditing) {
+        final id = widget.product?['id'];
+        if (id is int) {
+          await LocalDb.instance.updateItem(id, {
+            ...baseFields,
+            if (_imageUrl != null) 'image_path': _imageUrl,
+          });
+          MockStore.instance.updateProduct(id, baseFields);
+          if (_imageUrl != null) {
+            MockStore.instance.updateProduct(id, {'images': [_imageUrl]});
+          }
+        }
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Tersimpan'),
+            content: const Text('Perubahan produk berhasil disimpan.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
-        return;
+      } else {
+        final nowIso = DateTime.now().toIso8601String();
+        final newItem = {
+          'user_id': MockStore.instance.currentUser.value?['id'],
+          ...baseFields,
+          'image_path': _imageUrl,
+          'status': 'available',
+          'created_at': nowIso,
+        };
+        final itemId = await LocalDb.instance.insertItem(newItem);
+        final localProduct = {
+          'id': itemId,
+          ...newItem,
+          'images': _imageUrl != null ? [_imageUrl] : [],
+        };
+        MockStore.instance.addProduct(localProduct);
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Berhasil!'),
+            content: const Text('Iklan Anda berhasil diposting.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
-
-      // Proses posting iklan
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Berhasil!'),
-          content: const Text('Iklan Anda berhasil diposting'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan produk: $e')),
       );
     }
   }
@@ -115,10 +195,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                         onPressed: () => Navigator.pop(context),
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Jual Sampah',
-                          style: TextStyle(
+                          _isEditing ? 'Edit Produk' : 'Jual Sampah',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -164,7 +244,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         height: 100,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
-                          itemCount: 4,
+                          itemCount: 1,
                           itemBuilder: (context, index) {
                             return Padding(
                               padding: const EdgeInsets.only(right: 12),
@@ -175,7 +255,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Tambahkan minimal 3 foto produk',
+                        'Tambahkan 1 foto produk (opsional)',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -275,7 +355,53 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
                       const SizedBox(height: 16),
 
-                      // Berat dan Harga
+                      // Kondisi
+                      const Text(
+                        'Kondisi',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _selectedCondition,
+                        decoration: InputDecoration(
+                          hintText: 'Pilih kondisi',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        items: _conditions.map((c) {
+                          return DropdownMenuItem(
+                            value: c,
+                            child: Text(c),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedCondition = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Kondisi harus dipilih';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Berat & Jumlah
                       Row(
                         children: [
                           Expanded(
@@ -326,7 +452,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'Harga (Rp)',
+                                  'Jumlah',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -334,13 +460,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 TextFormField(
-                                  controller: _priceController,
+                                  controller: _quantityController,
                                   keyboardType: TextInputType.number,
                                   inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly,
                                   ],
                                   decoration: InputDecoration(
-                                    hintText: '0',
+                                    hintText: '1',
                                     hintStyle: TextStyle(color: Colors.grey[400]),
                                     filled: true,
                                     fillColor: Colors.grey[100],
@@ -357,6 +483,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                     if (value == null || value.isEmpty) {
                                       return 'Wajib diisi';
                                     }
+                                    if (int.tryParse(value) == null || int.parse(value) < 1) {
+                                      return 'Minimal 1';
+                                    }
                                     return null;
                                   },
                                 ),
@@ -364,6 +493,45 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             ),
                           ),
                         ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Harga
+                      const Text(
+                        'Harga (Rp)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _priceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: InputDecoration(
+                          hintText: '0',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Wajib diisi';
+                          }
+                          return null;
+                        },
                       ),
 
                       const SizedBox(height: 16),
@@ -401,69 +569,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Lokasi Pengambilan Section
-                      const Text(
-                        'Lokasi Pengambilan',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Alamat Lengkap
-                      const Text(
-                        'Alamat Lengkap',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _addressController,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          hintText: 'Masukkan alamat lengkap...',
-                          hintStyle: TextStyle(color: Colors.grey[400]),
-                          filled: true,
-                          fillColor: Colors.grey[100],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.all(16),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Alamat harus diisi';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Gunakan Lokasi Saat Ini Button
-                      OutlinedButton.icon(
-                        onPressed: _useCurrentLocation,
-                        icon: const Icon(Icons.location_on_outlined),
-                        label: const Text('Gunakan Lokasi Saat Ini'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.green[700],
-                          side: BorderSide(color: Colors.green[700]!),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
+                      // Lokasi section removed
 
                       // Saran Harga Info Box
                       Container(
@@ -532,9 +638,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             ),
                             elevation: 0,
                           ),
-                          child: const Text(
-                            'Posting Iklan',
-                            style: TextStyle(
+                          child: Text(
+                            _isEditing ? 'Simpan Perubahan' : 'Posting Iklan',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -582,7 +688,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             width: 1,
           ),
         ),
-        child: _images[index] == null
+        child: _imageUrl == null
             ? Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -593,7 +699,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    index == 0 ? 'Tambah' : '',
+                    'Tambah',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -605,12 +711,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      _images[index]!,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                    ),
+                    child: _imageUrl != null && _imageUrl!.startsWith('http')
+                        ? Image.network(
+                            _imageUrl!,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.file(
+                            File(_imageUrl!),
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                   Positioned(
                     top: 4,
@@ -618,7 +731,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     child: GestureDetector(
                       onTap: () {
                         setState(() {
-                          _images[index] = null;
+                          _imageUrl = null;
                         });
                       },
                       child: Container(

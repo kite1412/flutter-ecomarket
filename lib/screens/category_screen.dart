@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
 import '../widgets/product_card.dart';
+import 'product_detail_screen.dart';
+import '../services/local_db.dart';
+import '../utils/format.dart';
 
-class CategoryScreen extends StatelessWidget {
+class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
+
+  @override
+  State<CategoryScreen> createState() => _CategoryScreenState();
+}
+
+class _CategoryScreenState extends State<CategoryScreen> {
+  String _selectedCategory = 'Plastik';
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
@@ -48,8 +60,10 @@ class CategoryScreen extends StatelessWidget {
                           const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
+                              controller: _searchController,
+                              onChanged: (v) => setState(() => _searchQuery = v.trim()),
                               decoration: InputDecoration(
-                                hintText: 'Cari Sampah',
+                                hintText: 'Cari produk berdasarkan judul',
                                 hintStyle: TextStyle(color: Colors.grey[400]),
                                 border: InputBorder.none,
                               ),
@@ -77,7 +91,7 @@ class CategoryScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               
-              // Category Grid
+              // Category Grid (only valid categories)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: GridView.count(
@@ -88,42 +102,10 @@ class CategoryScreen extends StatelessWidget {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.5,
                   children: [
-                    _buildCategoryCard(
-                      'Plastik',
-                      '120 Items',
-                      Icons.recycling,
-                      Colors.blue,
-                    ),
-                    _buildCategoryCard(
-                      'Kertas',
-                      '89 Items',
-                      Icons.description,
-                      Colors.orange,
-                    ),
-                    _buildCategoryCard(
-                      'Elektronik',
-                      '45 Items',
-                      Icons.lightbulb_outline,
-                      Colors.purple,
-                    ),
-                    _buildCategoryCard(
-                      'Organik',
-                      '67 Items',
-                      Icons.eco,
-                      Colors.green,
-                    ),
-                    _buildCategoryCard(
-                      'Kaca',
-                      '34 Items',
-                      Icons.wine_bar_outlined,
-                      Colors.teal,
-                    ),
-                    _buildCategoryCard(
-                      'Logam',
-                      '52 Items',
-                      Icons.settings,
-                      Colors.grey,
-                    ),
+                    _buildCategoryButton('Plastik', Icons.recycling, Colors.blue),
+                    _buildCategoryButton('Kertas', Icons.description, Colors.orange),
+                    _buildCategoryButton('Elektronik', Icons.lightbulb_outline, Colors.purple),
+                    _buildCategoryButton('Logam', Icons.settings, Colors.grey),
                   ],
                 ),
               ),
@@ -156,42 +138,64 @@ class CategoryScreen extends StatelessWidget {
                 ),
               ),
               
-              // Product Grid
+              // Product Grid (from local DB filtered by selected category)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.75,
-                  children: [
-                    ProductCard(
-                      imageUrl: 'assets/images/product1.jpg',
-                      title: 'Botol Plastik Bekas 5 Kecil',
-                      price: 'Rp 75.000',
-                      weight: '10 Kg',
-                    ),
-                    ProductCard(
-                      imageUrl: 'assets/images/product2.jpg',
-                      title: 'Gelas (Art) Kaleng Kontra',
-                      price: 'Rp 45.000',
-                      weight: '5 Kg',
-                    ),
-                    ProductCard(
-                      imageUrl: 'assets/images/product3.jpg',
-                      title: 'Kaleng Bekas(Art) 20kg',
-                      price: 'Rp 125.000',
-                      weight: '20 Kg',
-                    ),
-                    ProductCard(
-                      imageUrl: 'assets/images/product4.jpg',
-                      title: 'Botol X Kompress',
-                      price: 'Rp 450.000',
-                      weight: '50 Kg',
-                    ),
-                  ],
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: LocalDb.instance.listItems(status: 'available'),
+                  builder: (context, snap) {
+                    final allItems = snap.data ?? [];
+                    final items = allItems.where((e) {
+                      final category = (e['category']?.toString() ?? '');
+                      final title = (e['title']?.toString() ?? '');
+                      final matchesCategory = category == _selectedCategory;
+                      final matchesQuery = _searchQuery.isEmpty || title.toLowerCase().contains(_searchQuery.toLowerCase());
+                      return matchesCategory && matchesQuery;
+                    }).toList();
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (items.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: Text('Belum ada produk untuk kategori $_selectedCategory.')),
+                      );
+                    }
+
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.75,
+                      ),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final p = items[index];
+                        return InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ProductDetailScreen(product: p),
+                              ),
+                            );
+                          },
+                          child: ProductCard(
+                            imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
+                            title: p['title']?.toString() ?? '',
+                            price: formatRupiah(p['price']),
+                            subtitle: (_selectedCategory) + (p['condition'] != null ? ' · ${p['condition']}' : ''),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 24),
@@ -237,7 +241,7 @@ class CategoryScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 100),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -245,54 +249,51 @@ class CategoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCategoryCard(
-    String title,
-    String subtitle,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 32,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-              ),
+  Widget _buildCategoryButton(String title, IconData icon, Color color) {
+    final isSelected = _selectedCategory == title;
+    return InkWell(
+      onTap: () => setState(() => _selectedCategory = title),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              spreadRadius: 1,
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
+          border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isSelected ? 'Dipilih' : 'Klik untuk pilih',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -327,5 +328,11 @@ class CategoryScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }

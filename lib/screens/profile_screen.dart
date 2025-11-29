@@ -1,7 +1,174 @@
 import 'package:flutter/material.dart';
+import '../services/mock_store.dart';
+import '../services/local_db.dart';
+import '../utils/format.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String _name = 'Sidiq Recycling';
+  String _email = 'Sidiq@email.com';
+  String _address = '';
+
+  final _editFormKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    MockStore.instance.currentUser.removeListener(_onUserChanged);
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // initialize from mock store if available and listen for changes
+    final user = MockStore.instance.currentUser.value;
+    if (user != null) {
+      _name = (user['name'] ?? _name) as String;
+      _email = (user['email'] ?? _email) as String;
+      _address = (user['address'] ?? '') as String;
+    }
+    MockStore.instance.currentUser.addListener(_onUserChanged);
+  }
+
+  void _onUserChanged() {
+    final user = MockStore.instance.currentUser.value;
+    setState(() {
+      if (user == null) {
+        _name = 'Sidiq Recycling';
+        _email = 'Sidiq@email.com';
+        _address = '';
+      } else {
+        _name = (user['name'] ?? _name) as String;
+        _email = (user['email'] ?? _email) as String;
+         _address = (user['address'] ?? '') as String;
+      }
+    });
+  }
+
+  void _showEditProfileDialog() {
+    _nameController.text = _name;
+    _emailController.text = _email;
+
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Profil'),
+        content: Form(
+          key: _editFormKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Nama'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Nama tidak boleh kosong' : null,
+              ),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'Email'),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Email tidak boleh kosong';
+                  if (!v.contains('@')) return 'Masukkan email yang valid';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () async {
+              if (!(_editFormKey.currentState?.validate() ?? false)) return;
+              final newName = _nameController.text.trim();
+              final newEmail = _emailController.text.trim();
+              // Fetch existing user to preserve password when only name changes
+              final existing = await LocalDb.instance.getUserByEmail(_email);
+              final preservedPassword = existing?['password'] ?? '';
+              final preservedAddress = existing?['address'] ?? (MockStore.instance.currentUser.value?['address'] ?? '');
+              final preservedCreated = existing?['created_at'] ?? MockStore.instance.currentUser.value?['created_at'] ?? DateTime.now().toIso8601String();
+              // Build map for upsert (will update by email)
+              final userMap = {
+                'name': newName,
+                'email': newEmail,
+                'password': preservedPassword,
+                'address': preservedAddress,
+                'created_at': preservedCreated,
+              };
+              try {
+                await LocalDb.instance.upsertUser(userMap);
+                final refreshed = await LocalDb.instance.getUserByEmail(newEmail);
+                if (refreshed != null) {
+                  MockStore.instance.currentUser.value = refreshed;
+                  setState(() {
+                    _name = refreshed['name']?.toString() ?? newName;
+                    _email = refreshed['email']?.toString() ?? newEmail;
+                  });
+                }
+                if (mounted) Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil berhasil diperbarui')));
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditAddressDialog() {
+    final user = MockStore.instance.currentUser.value;
+    if (user == null) return;
+    final TextEditingController addrController = TextEditingController(text: _address);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Alamat'),
+        content: TextField(
+          controller: addrController,
+          decoration: const InputDecoration(labelText: 'Alamat'),
+          minLines: 1,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () async {
+              final newAddr = addrController.text.trim();
+              final id = user['id'];
+              if (id is int) {
+                try {
+                  await LocalDb.instance.updateUser(id, {'address': newAddr});
+                  final refreshed = await LocalDb.instance.getUserById(id);
+                  if (refreshed != null) {
+                    MockStore.instance.currentUser.value = refreshed;
+                  }
+                  setState(() { _address = newAddr; });
+                  if (mounted) Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alamat diperbarui')));
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan alamat: $e')));
+                }
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,9 +216,9 @@ class ProfileScreen extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Sidiq Recycling',
-                                style: TextStyle(
+                              Text(
+                                _name,
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
@@ -59,7 +226,7 @@ class ProfileScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Sidiq@email.com',
+                                _email,
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.9),
                                   fontSize: 14,
@@ -74,7 +241,7 @@ class ProfileScreen extends StatelessWidget {
                             Icons.edit,
                             color: Colors.white,
                           ),
-                          onPressed: () {},
+                          onPressed: _showEditProfileDialog,
                         ),
                       ],
                     ),
@@ -116,7 +283,7 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               
-              // Menu Items
+              // Menu Items (Updated)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
@@ -140,26 +307,26 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: Colors.green[50]!,
                     ),
                     _buildDivider(),
-                    _buildMenuItem(
-                      icon: Icons.attach_money,
-                      title: 'Riwayat Saldo',
-                      iconColor: Colors.orange[700]!,
-                      iconBg: Colors.orange[50]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
-                      icon: Icons.favorite_outline,
-                      title: 'Favorit',
-                      iconColor: Colors.pink[700]!,
-                      iconBg: Colors.pink[50]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
-                      icon: Icons.location_on_outlined,
-                      title: 'Alamat',
-                      trailing: 'Rp 246.000',
-                      iconColor: Colors.blue[700]!,
-                      iconBg: Colors.blue[50]!,
+                    // Alamat + Balance
+                    FutureBuilder<Map<String, dynamic>?>(
+                      future: () async {
+                        final user = MockStore.instance.currentUser.value;
+                        if (user == null) return null;
+                        final bal = await LocalDb.instance.getBalance(user['id'] as int);
+                        return bal;
+                      }(),
+                      builder: (context, snapshot) {
+                        final amount = snapshot.data?['amount'] is num ? snapshot.data!['amount'] as num : null;
+                        final trailing = amount != null ? formatRupiah(amount) : null;
+                        return _buildMenuItem(
+                          icon: Icons.location_on_outlined,
+                          title: _address.isNotEmpty ? 'Alamat' : 'Tambah Alamat',
+                          trailing: trailing,
+                          iconColor: Colors.blue[700]!,
+                          iconBg: Colors.blue[50]!,
+                          onTap: _showEditAddressDialog,
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -237,32 +404,16 @@ class ProfileScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     _buildMenuItem(
-                      icon: Icons.settings_outlined,
-                      title: 'Pengaturan Akun',
-                      iconColor: Colors.grey[700]!,
-                      iconBg: Colors.grey[100]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
-                      icon: Icons.help_outline,
-                      title: 'Pusat Bantuan',
-                      iconColor: Colors.grey[700]!,
-                      iconBg: Colors.grey[100]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
-                      icon: Icons.description_outlined,
-                      title: 'Ketentuan & Privasi',
-                      iconColor: Colors.grey[700]!,
-                      iconBg: Colors.grey[100]!,
-                    ),
-                    _buildDivider(),
-                    _buildMenuItem(
                       icon: Icons.logout,
                       title: 'Keluar',
                       iconColor: Colors.red[700]!,
                       iconBg: Colors.red[50]!,
                       showArrow: false,
+                      onTap: () {
+                        // sign out from mock store
+                        MockStore.instance.signOut();
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda telah keluar')));
+                      },
                     ),
                   ],
                 ),
@@ -326,6 +477,7 @@ class ProfileScreen extends StatelessWidget {
     required Color iconColor,
     required Color iconBg,
     bool showArrow = true,
+    VoidCallback? onTap,
   }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -369,7 +521,7 @@ class ProfileScreen extends StatelessWidget {
           ],
         ],
       ),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 
