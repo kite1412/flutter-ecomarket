@@ -31,7 +31,9 @@ class ProductDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.green[700],
-        title: Text('Detail Produk'),
+        foregroundColor: Colors.white,
+        title: const Text('Detail Produk'),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -272,7 +274,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final total = priceVal * _quantity;
 
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.green[700], title: const Text('Checkout')),
+      appBar: AppBar(
+        backgroundColor: Colors.green[700],
+        foregroundColor: Colors.white,
+        title: const Text('Checkout'),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

@@ -68,6 +68,10 @@ class _AuthScreenState extends State<AuthScreen> {
           'name': created['name'] ?? '',
           'address': created['address'] ?? '',
         };
+        // Ensure balance row exists for new user
+        try {
+          await LocalDb.instance.ensureBalance(created['id'] as int);
+        } catch (_) {}
       }
     }
   }

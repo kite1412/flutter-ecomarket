@@ -237,4 +237,41 @@ class LocalDb {
     }
     return database.query('reviews', where: where, whereArgs: whereArgs, orderBy: 'created_at DESC');
   }
+
+  // Balances
+  Future<Map<String, dynamic>?> getBalance(int userId) async {
+    final database = await db;
+    final rows = await database.query('balances', where: 'user_id = ?', whereArgs: [userId], limit: 1);
+    return rows.isNotEmpty ? rows.first : null;
+  }
+
+  Future<int> createBalance(int userId, {double amount = 0.0, String currency = 'IDR'}) async {
+    final database = await db;
+    final nowIso = DateTime.now().toIso8601String();
+    return database.insert('balances', {
+      'user_id': userId,
+      'amount': amount,
+      'currency': currency,
+      'updated_at': nowIso,
+      'created_at': nowIso,
+    });
+  }
+
+  Future<Map<String, dynamic>> ensureBalance(int userId) async {
+    final existing = await getBalance(userId);
+    if (existing != null) return existing;
+    final id = await createBalance(userId);
+    return (await getBalance(userId)) ?? {'user_id': userId, 'amount': 0.0, 'currency': 'IDR'};
+  }
+
+  Future<int> addToBalance(int userId, double delta) async {
+    final database = await db;
+    final nowIso = DateTime.now().toIso8601String();
+    // Ensure exists
+    await ensureBalance(userId);
+    return database.rawUpdate(
+      'UPDATE balances SET amount = amount + ?, updated_at = ? WHERE user_id = ?',
+      [delta, nowIso, userId],
+    );
+  }
 }

@@ -6,8 +6,62 @@ import '../services/local_db.dart';
 import '../utils/format.dart';
 import 'product_detail_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Future<void> _showTopUpDialog() async {
+    final user = MockStore.instance.currentUser.value;
+    if (user == null) return;
+    final id = user['id'] as int;
+    final ctrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Top Up Saldo'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Nominal (Rp)', hintText: '10000'),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'Masukkan nominal';
+              final val = double.tryParse(v.replaceAll('.', '').trim());
+              if (val == null || val <= 0) return 'Nominal tidak valid';
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                final val = double.parse(ctrl.text.replaceAll('.', '').trim());
+                Navigator.pop(ctx, val);
+              }
+            },
+            child: const Text('Tambah'),
+          ),
+        ],
+      ),
+    );
+    if (result != null && result > 0) {
+      await LocalDb.instance.addToBalance(id, result);
+      setState(() {}); // trigger rebuild for new balance
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saldo bertambah Rp ${result.toInt()}')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,73 +136,36 @@ class HomeScreen extends StatelessWidget {
                             children: [
                               Text(
                                 'Saldo',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
                               ),
                               const SizedBox(height: 4),
-                              const Text(
-                                'Rp 245.000',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              ValueListenableBuilder<Map<String, dynamic>?>(
+                                valueListenable: MockStore.instance.currentUser,
+                                builder: (context, user, _) {
+                                  if (user == null) {
+                                    return const Text('Rp 0', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold));
+                                  }
+                                  return FutureBuilder<Map<String, dynamic>?>(
+                                    future: LocalDb.instance.getBalance(user['id'] as int),
+                                    builder: (context, snap) {
+                                      final amount = (snap.data != null ? snap.data!['amount'] : 0.0) as num;
+                                      final formatted = formatRupiah(amount); // use utility
+                                      return Text(formatted, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold));
+                                    },
+                                  );
+                                },
                               ),
                             ],
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Poin',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Text(
-                                    '1.2 Ton',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.arrow_upward,
-                                          color: Colors.green[700],
-                                          size: 12,
-                                        ),
-                                        Text(
-                                          '4.8 %',
-                                          style: TextStyle(
-                                            color: Colors.green[700],
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                          ElevatedButton(
+                            onPressed: MockStore.instance.currentUser.value == null ? null : _showTopUpDialog,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green[700],
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            ),
+                            child: const Text('Top Up', style: TextStyle(fontWeight: FontWeight.bold)),
+                          )
                         ],
                       ),
                     ),
