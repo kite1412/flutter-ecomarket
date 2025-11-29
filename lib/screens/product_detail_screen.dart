@@ -52,7 +52,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final images = product['images'] as List? ?? [];
-    final imageUrl = images.isNotEmpty ? images.first as String? : null;
+    final imageUrl = images.isNotEmpty
+      ? images.first as String?
+      : (product['image_path']?.toString());
     final title = product['title'] ?? '';
     final price = product['price'];
     final weight = product['weight_kg'] ?? product['weight'] ?? '';
@@ -429,7 +431,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: stock > 0 ? () async {
-                  // Insert transaction row (pending)
+                  // Insert transaction row (default 'completed' per DB schema)
                   final buyerId = MockStore.instance.currentUser.value?['id'];
                   final itemId = p['id'];
                   if (buyerId is int && itemId is int) {
@@ -438,8 +440,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         'buyer_id': buyerId,
                         'item_id': itemId,
                         'price': total,
-                        'status': 'pending',
-                        'created_at': DateTime.now().toIso8601String(),
+                        // omit status & created_at to use defaults ('completed')
                       });
                     } catch (_) {}
                   }
@@ -448,8 +449,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     'storeName': p['title'] ?? '',
                     'date': DateTime.now().toIso8601String(),
                     'weight': p['weight'] ?? '',
-                    'status': 'Pending',
-                    'statusColor': Colors.red[400]!.value,
+                    'status': 'Selesai',
+                    'statusColor': Colors.green[600]!.value,
                     'price': formatRupiah(total),
                     'icon': Icons.description.codePoint,
                     'iconBg': Colors.purple[100]!.value,
@@ -475,7 +476,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     } catch (_) {}
                   }
                   Navigator.of(context).popUntil((route) => route.isFirst);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Checkout berhasil (mock). Pesanan ditambahkan.')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Checkout berhasil. Pesanan ditambahkan.')));
                 } : null,
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], padding: const EdgeInsets.symmetric(vertical: 14)),
                 child: const Text('Konfirmasi Pembayaran', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),

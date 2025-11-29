@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/category_card.dart';
+import 'category_screen.dart';
 import '../widgets/product_card.dart';
 import '../services/mock_store.dart';
 import '../services/local_db.dart';
@@ -113,11 +114,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined),
-                          color: Colors.white,
-                          onPressed: () {},
-                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -188,7 +184,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoryScreen(),
+                          ),
+                        );
+                      },
                       child: Text(
                         'Lihat Semua',
                         style: TextStyle(
@@ -212,24 +215,56 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Plastik',
                       color: Colors.blue[100]!,
                       iconColor: Colors.blue[700]!,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoryScreen(initialCategory: 'Plastik'),
+                          ),
+                        );
+                      },
                     ),
                     CategoryCard(
                       icon: Icons.description,
                       label: 'Kertas',
                       color: Colors.orange[100]!,
                       iconColor: Colors.orange[700]!,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoryScreen(initialCategory: 'Kertas'),
+                          ),
+                        );
+                      },
                     ),
                     CategoryCard(
                       icon: Icons.lightbulb_outline,
                       label: 'Elektronik',
                       color: Colors.purple[100]!,
                       iconColor: Colors.purple[700]!,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoryScreen(initialCategory: 'Elektronik'),
+                          ),
+                        );
+                      },
                     ),
                     CategoryCard(
-                      icon: Icons.eco,
-                      label: 'Organik',
+                      icon: Icons.build,
+                      label: 'Logam',
                       color: Colors.green[100]!,
                       iconColor: Colors.green[700]!,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoryScreen(initialCategory: 'Logam'),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -251,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Diskon 20% untuk Malam',
+                        'Belanja Produk Daur Ulang',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -260,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Kumpulkan sampah organik untuk mendapatkan bonus poin',
+                        'Butuh barang bekas? Temukan produk sesuai kategori.',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 14,
@@ -268,7 +303,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 12),
                       ElevatedButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CategoryScreen(),
+                            ),
+                          );
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.green[700],
@@ -280,12 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: const Text(
-                          'Ambil Misi',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        child: const Text('Belanja Sekarang', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -307,7 +344,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoryScreen(),
+                          ),
+                        );
+                      },
                       child: Text(
                         'Lihat Semua',
                         style: TextStyle(
@@ -326,9 +370,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ValueListenableBuilder<List<Map<String, dynamic>>>(
                   valueListenable: MockStore.instance.products,
                   builder: (context, _, __) {
-                    return FutureBuilder<List<Map<String, dynamic>>>(
-                      future: LocalDb.instance.listItems(),
-                      builder: (context, snap) {
+                    // Also listen to DB changes; any insert/update/delete bumps revision
+                    return ValueListenableBuilder<int>(
+                      valueListenable: LocalDb.instance.itemsRevision,
+                      builder: (context, __rev, ___) {
+                        return FutureBuilder<List<Map<String, dynamic>>>(
+                          future: LocalDb.instance.listItems(),
+                          builder: (context, snap) {
                         var products = snap.data ?? [];
                         // Merge in-memory updates (e.g., images or recent edits) from MockStore
                         final memory = MockStore.instance.products.value;
@@ -373,13 +421,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               },
                               child: ProductCard(
-                                imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
+                                imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty)
+                                    ? (p['images'] as List).first as String?
+                                    : (p['image_path']?.toString()),
                                 title: p['title'] ?? '',
                                 price: formatRupiah(p['price']),
                                 subtitle: (p['category'] != null ? '${p['category']}' : '') + (p['condition'] != null ? ' · ${p['condition']}' : ''),
                                 quantity: p['quantity'] is int ? p['quantity'] as int : int.tryParse(p['quantity']?.toString() ?? '') ?? 1,
                               ),
                             );
+                          },
+                        );
                           },
                         );
                       },

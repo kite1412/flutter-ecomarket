@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
@@ -7,6 +8,11 @@ class LocalDb {
   LocalDb._();
 
   Database? _db;
+  // Notifies listeners whenever items table mutates
+  final ValueNotifier<int> itemsRevision = ValueNotifier<int>(0);
+  void _bumpItemsRevision() {
+    try { itemsRevision.value = itemsRevision.value + 1; } catch (_) {}
+  }
   Future<Database> get db async {
     if (_db != null) return _db!;
     _db = await _open();
@@ -18,7 +24,7 @@ class LocalDb {
     final path = p.join(dbPath, 'ecomarket.db');
     return openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: (Database db, int version) async {
         await db.execute('''
         CREATE TABLE users (
@@ -53,7 +59,7 @@ class LocalDb {
           buyer_id INTEGER,
           item_id INTEGER,
           price REAL,
-          status TEXT CHECK(status IN ('pending','dibayar')),
+          status TEXT DEFAULT 'completed' CHECK(status IN ('pending','process','completed','dibayar')),
           created_at TEXT,
           FOREIGN KEY(buyer_id) REFERENCES users(id),
           FOREIGN KEY(item_id) REFERENCES items(id)
@@ -115,7 +121,7 @@ class LocalDb {
               buyer_id INTEGER,
               item_id INTEGER,
               price REAL,
-              status TEXT CHECK(status IN ('pending','dibayar')),
+              status TEXT DEFAULT 'completed' CHECK(status IN ('pending','process','completed','dibayar')),
               created_at TEXT,
               FOREIGN KEY(buyer_id) REFERENCES users(id),
               FOREIGN KEY(item_id) REFERENCES items(id)
@@ -144,6 +150,42 @@ class LocalDb {
           try {
             await db.execute('ALTER TABLE items ADD COLUMN image_path TEXT');
           } catch (_) {}
+        }
+        if (oldVersion < 6) {
+          // Rebuild transactions table to add new statuses and default
+            try {
+              final hasTx = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'");
+              if (hasTx.isNotEmpty) {
+                await db.execute('ALTER TABLE transactions RENAME TO transactions_old');
+              }
+              await db.execute('''
+              CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                buyer_id INTEGER,
+                item_id INTEGER,
+                price REAL,
+                status TEXT DEFAULT 'completed' CHECK(status IN ('pending','process','completed','dibayar')),
+                created_at TEXT,
+                FOREIGN KEY(buyer_id) REFERENCES users(id),
+                FOREIGN KEY(item_id) REFERENCES items(id)
+              );
+              ''');
+              final hasOld = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions_old'");
+              if (hasOld.isNotEmpty) {
+                await db.execute('''
+                INSERT INTO transactions (id,buyer_id,item_id,price,status,created_at)
+                SELECT id,buyer_id,item_id,price,
+                  CASE
+                    WHEN lower(status) IN ('pending','process','completed') THEN lower(status)
+                    WHEN lower(status) = 'dibayar' THEN 'completed'
+                    ELSE 'pending'
+                  END,
+                  created_at
+                FROM transactions_old;
+                ''');
+                await db.execute('DROP TABLE transactions_old');
+              }
+            } catch (_) {}
         }
       },
     );
@@ -180,7 +222,9 @@ class LocalDb {
   // Items
   Future<int> insertItem(Map<String, dynamic> item) async {
     final database = await db;
-    return database.insert('items', item);
+    final id = await database.insert('items', item);
+    _bumpItemsRevision();
+    return id;
   }
 
   Future<Map<String, dynamic>?> getItem(int id) async {
@@ -222,18 +266,34 @@ class LocalDb {
 
   Future<int> updateItem(int id, Map<String, dynamic> fields) async {
     final database = await db;
-    return database.update('items', fields, where: 'id = ?', whereArgs: [id]);
+    final count = await database.update('items', fields, where: 'id = ?', whereArgs: [id]);
+    if (count > 0) _bumpItemsRevision();
+    return count;
   }
 
   Future<int> deleteItem(int id) async {
     final database = await db;
-    return database.delete('items', where: 'id = ?', whereArgs: [id]);
+    final count = await database.delete('items', where: 'id = ?', whereArgs: [id]);
+    if (count > 0) _bumpItemsRevision();
+    return count;
   }
 
   // Transactions
   Future<int> insertTransaction(Map<String, dynamic> tx) async {
     final database = await db;
-    return database.insert('transactions', tx);
+    final nowIso = DateTime.now().toIso8601String();
+    final toInsert = Map<String, dynamic>.from(tx);
+    if (!(toInsert.containsKey('status')) || (toInsert['status']?.toString().isEmpty ?? true)) {
+      toInsert['status'] = 'completed';
+    }
+    if (!(toInsert.containsKey('created_at')) || (toInsert['created_at']?.toString().isEmpty ?? true)) {
+      toInsert['created_at'] = nowIso;
+    }
+    // Normalize legacy value 'dibayar' to 'completed'
+    if (toInsert['status'] == 'dibayar') {
+      toInsert['status'] = 'completed';
+    }
+    return database.insert('transactions', toInsert);
   }
 
   Future<List<Map<String, dynamic>>> listTransactions({int? buyerId, String? status}) async {

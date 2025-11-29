@@ -5,16 +5,26 @@ import '../services/local_db.dart';
 import '../utils/format.dart';
 
 class CategoryScreen extends StatefulWidget {
-  const CategoryScreen({super.key});
+  final String? initialCategory;
+  const CategoryScreen({super.key, this.initialCategory});
 
   @override
   State<CategoryScreen> createState() => _CategoryScreenState();
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
-  String _selectedCategory = 'Plastik';
+  // Empty string means no category selected (show all)
+  String _selectedCategory = '';
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialCategory != null && widget.initialCategory!.isNotEmpty) {
+      _selectedCategory = widget.initialCategory!;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,7 +135,13 @@ class _CategoryScreenState extends State<CategoryScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        setState(() {
+                          _selectedCategory = '';
+                          _searchQuery = '';
+                          _searchController.clear();
+                        });
+                      },
                       child: Text(
                         'Lihat Semua',
                         style: TextStyle(
@@ -141,14 +157,17 @@ class _CategoryScreenState extends State<CategoryScreen> {
               // Product Grid (from local DB filtered by selected category)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: LocalDb.instance.listItems(status: 'available'),
-                  builder: (context, snap) {
+                child: ValueListenableBuilder<int>(
+                  valueListenable: LocalDb.instance.itemsRevision,
+                  builder: (context, __rev, ___) {
+                    return FutureBuilder<List<Map<String, dynamic>>>(
+                      future: LocalDb.instance.listItems(status: 'available'),
+                      builder: (context, snap) {
                     final allItems = snap.data ?? [];
                     final items = allItems.where((e) {
                       final category = (e['category']?.toString() ?? '');
                       final title = (e['title']?.toString() ?? '');
-                      final matchesCategory = category == _selectedCategory;
+                      final matchesCategory = _selectedCategory.isEmpty || category == _selectedCategory;
                       final matchesQuery = _searchQuery.isEmpty || title.toLowerCase().contains(_searchQuery.toLowerCase());
                       return matchesCategory && matchesQuery;
                     }).toList();
@@ -161,7 +180,13 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     if (items.isEmpty) {
                       return Container(
                         padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: Text('Belum ada produk untuk kategori $_selectedCategory.')),
+                        child: Center(
+                          child: Text(
+                            _selectedCategory.isEmpty
+                                ? 'Belum ada produk.'
+                                : 'Belum ada produk untuk kategori $_selectedCategory.',
+                          ),
+                        ),
                       );
                     }
 
@@ -187,12 +212,17 @@ class _CategoryScreenState extends State<CategoryScreen> {
                             );
                           },
                           child: ProductCard(
-                            imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
+                            imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty)
+                                ? (p['images'] as List).first as String?
+                                : (p['image_path']?.toString()),
                             title: p['title']?.toString() ?? '',
                             price: formatRupiah(p['price']),
-                            subtitle: (_selectedCategory) + (p['condition'] != null ? ' · ${p['condition']}' : ''),
+                            subtitle: '${_selectedCategory.isEmpty ? (p['category']?.toString() ?? '') : _selectedCategory}'
+                                '${p['condition'] != null ? ' · ${p['condition']}' : ''}',
                           ),
                         );
+                      },
+                    );
                       },
                     );
                   },
@@ -252,7 +282,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Widget _buildCategoryButton(String title, IconData icon, Color color) {
     final isSelected = _selectedCategory == title;
     return InkWell(
-      onTap: () => setState(() => _selectedCategory = title),
+      onTap: () => setState(() => _selectedCategory = isSelected ? '' : title),
       child: Container(
         decoration: BoxDecoration(
           color: color,
