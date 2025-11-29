@@ -18,7 +18,7 @@ class LocalDb {
     final path = p.join(dbPath, 'ecomarket.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: (Database db, int version) async {
         await db.execute('''
         CREATE TABLE users (
@@ -39,6 +39,7 @@ class LocalDb {
           category TEXT,
           condition TEXT,
           weight_kg REAL,
+          quantity INTEGER DEFAULT 1,
           price REAL,
           status TEXT,
           created_at TEXT,
@@ -51,7 +52,7 @@ class LocalDb {
           buyer_id INTEGER,
           item_id INTEGER,
           price REAL,
-          status TEXT,
+          status TEXT CHECK(status IN ('pending','dibayar')),
           created_at TEXT,
           FOREIGN KEY(buyer_id) REFERENCES users(id),
           FOREIGN KEY(item_id) REFERENCES items(id)
@@ -94,6 +95,48 @@ class LocalDb {
             FOREIGN KEY(user_id) REFERENCES users(id)
           );
           ''');
+        }
+        if (oldVersion < 3) {
+          try {
+            await db.execute('ALTER TABLE items ADD COLUMN quantity INTEGER DEFAULT 1');
+          } catch (_) {}
+        }
+        if (oldVersion < 4) {
+          // Rebuild transactions table with status enum constraint
+          try {
+            final hasTx = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'");
+            if (hasTx.isNotEmpty) {
+              await db.execute('ALTER TABLE transactions RENAME TO transactions_old');
+            }
+            await db.execute('''
+            CREATE TABLE transactions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              buyer_id INTEGER,
+              item_id INTEGER,
+              price REAL,
+              status TEXT CHECK(status IN ('pending','dibayar')),
+              created_at TEXT,
+              FOREIGN KEY(buyer_id) REFERENCES users(id),
+              FOREIGN KEY(item_id) REFERENCES items(id)
+            );
+            ''');
+            final hasOld = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions_old'");
+            if (hasOld.isNotEmpty) {
+              await db.execute('''
+              INSERT INTO transactions (id,buyer_id,item_id,price,status,created_at)
+              SELECT id,buyer_id,item_id,price,
+                CASE
+                  WHEN lower(status) IN ('pending','dibayar') THEN lower(status)
+                  WHEN status = 'Belum dibayar' THEN 'pending'
+                  WHEN status = 'Menunggu' THEN 'pending'
+                  ELSE 'pending'
+                END,
+                created_at
+              FROM transactions_old;
+              ''');
+              await db.execute('DROP TABLE transactions_old');
+            }
+          } catch (_) {}
         }
       },
     );

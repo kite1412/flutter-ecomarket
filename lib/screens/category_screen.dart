@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/product_card.dart';
 import '../services/local_db.dart';
+import '../utils/format.dart';
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
@@ -178,7 +179,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                         return ProductCard(
                           imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
                           title: p['title']?.toString() ?? '',
-                          price: p['price'] != null ? 'Rp ${p['price']}' : 'Rp 0',
+                          price: formatRupiah(p['price']),
                           subtitle: (_selectedCategory) + (p['condition'] != null ? ' · ${p['condition']}' : ''),
                         );
                       },

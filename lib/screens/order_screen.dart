@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/local_db.dart';
 import '../services/mock_store.dart';
+import '../utils/format.dart';
 
 class OrderScreen extends StatefulWidget {
   const OrderScreen({super.key});
@@ -54,7 +55,7 @@ class _OrderScreenState extends State<OrderScreen> {
         'weight': item?['weight_kg'] != null ? '${item!['weight_kg']} kg' : '',
         'status': statusLabel,
         'statusColor': statusColor.value,
-        'price': tx['price'] != null ? 'Rp ${tx['price'].round()}' : 'Rp 0',
+        'price': formatRupiah(tx['price']),
         'icon': iconData.codePoint,
         'iconBg': _iconBg(category).value,
         'iconColor': _iconColor(category).value,

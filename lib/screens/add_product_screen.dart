@@ -14,6 +14,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _weightController = TextEditingController();
+  final _quantityController = TextEditingController(text: '1');
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
   // Removed address/location for local DB-only implementation
@@ -36,6 +37,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   void dispose() {
     _nameController.dispose();
     _weightController.dispose();
+    _quantityController.dispose();
     _priceController.dispose();
     _descriptionController.dispose();
     // address controller removed
@@ -65,6 +67,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         'category': _selectedCategory ?? 'Plastik',
         'condition': _selectedCondition ?? 'Bagus',
         'weight_kg': double.tryParse(_weightController.text.trim()) ?? 0,
+        'quantity': int.tryParse(_quantityController.text.trim()) ?? 1,
         'price': double.tryParse(_priceController.text.trim()) ?? 0,
         'status': 'available',
         'created_at': nowIso,
@@ -334,7 +337,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
                       const SizedBox(height: 16),
 
-                      // Berat dan Harga
+                      // Berat & Jumlah
                       Row(
                         children: [
                           Expanded(
@@ -385,7 +388,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'Harga (Rp)',
+                                  'Jumlah',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -393,13 +396,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 TextFormField(
-                                  controller: _priceController,
+                                  controller: _quantityController,
                                   keyboardType: TextInputType.number,
                                   inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly,
                                   ],
                                   decoration: InputDecoration(
-                                    hintText: '0',
+                                    hintText: '1',
                                     hintStyle: TextStyle(color: Colors.grey[400]),
                                     filled: true,
                                     fillColor: Colors.grey[100],
@@ -416,6 +419,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                     if (value == null || value.isEmpty) {
                                       return 'Wajib diisi';
                                     }
+                                    if (int.tryParse(value) == null || int.parse(value) < 1) {
+                                      return 'Minimal 1';
+                                    }
                                     return null;
                                   },
                                 ),
@@ -423,6 +429,45 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             ),
                           ),
                         ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Harga
+                      const Text(
+                        'Harga (Rp)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _priceController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: InputDecoration(
+                          hintText: '0',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Wajib diisi';
+                          }
+                          return null;
+                        },
                       ),
 
                       const SizedBox(height: 16),

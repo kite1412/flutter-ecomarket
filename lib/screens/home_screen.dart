@@ -3,6 +3,7 @@ import '../widgets/category_card.dart';
 import '../widgets/product_card.dart';
 import '../services/mock_store.dart';
 import '../services/local_db.dart';
+import '../utils/format.dart';
 import 'product_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -348,7 +349,7 @@ class HomeScreen extends StatelessWidget {
                               child: ProductCard(
                                 imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
                                 title: p['title'] ?? '',
-                                price: p['price'] != null && p['price'].toString().isNotEmpty ? '${p['price']}' : '0',
+                                price: formatRupiah(p['price']),
                                 subtitle: (p['category'] != null ? '${p['category']}' : '') + (p['condition'] != null ? ' · ${p['condition']}' : ''),
                               ),
                             );
@@ -361,52 +362,6 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               
-              // Buku Disumbangkan Section
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Buku Disumbangkan',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {},
-                      child: Text(
-                        'Lihat Semua',
-                        style: TextStyle(
-                          color: Colors.green[700],
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Book Items
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    _buildBookItem(
-                      'Buku Hukum Tata Negara 226g',
-                      'Rp 50.000',
-                      'Kondisi Baik',
-                    ),
-                    const SizedBox(height: 12),
-                    _buildBookItem(
-                      'Buku A Symposium Elektronik',
-                      'Rp 100.000',
-                      'Kurang Baik & Sampul Hilang',
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 100),
             ],
           ),
@@ -415,61 +370,5 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBookItem(String title, String price, String condition) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.book,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  price,
-                  style: TextStyle(
-                    color: Colors.green[700],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  condition,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed donated books section
 }
