@@ -18,7 +18,7 @@ class LocalDb {
     final path = p.join(dbPath, 'ecomarket.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (Database db, int version) async {
         await db.execute('''
         CREATE TABLE users (
@@ -69,6 +69,32 @@ class LocalDb {
           FOREIGN KEY(item_id) REFERENCES items(id)
         );
         ''' );
+        await db.execute('''
+        CREATE TABLE balances (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          amount REAL DEFAULT 0.0,
+          currency TEXT DEFAULT 'IDR',
+          updated_at TEXT,
+          created_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        ''');
+      },
+      onUpgrade: (Database db, int oldVersion, int newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+          CREATE TABLE IF NOT EXISTS balances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            amount REAL DEFAULT 0.0,
+            currency TEXT DEFAULT 'IDR',
+            updated_at TEXT,
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+          );
+          ''');
+        }
       },
     );
   }
@@ -94,6 +120,12 @@ class LocalDb {
   Future<int> insertItem(Map<String, dynamic> item) async {
     final database = await db;
     return database.insert('items', item);
+  }
+
+  Future<Map<String, dynamic>?> getItem(int id) async {
+    final database = await db;
+    final rows = await database.query('items', where: 'id = ?', whereArgs: [id], limit: 1);
+    return rows.isNotEmpty ? rows.first : null;
   }
 
   Future<List<Map<String, dynamic>>> listItems({int? userId, String? status}) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/mock_store.dart';
+import '../services/local_db.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -82,21 +83,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')),
           ElevatedButton(
-            onPressed: () {
-              if (_editFormKey.currentState?.validate() ?? false) {
-                final newName = _nameController.text.trim();
-                final newEmail = _emailController.text.trim();
-                setState(() {
-                  _name = newName;
-                  _email = newEmail;
-                });
-
-                // update mock current user while preserving id if present
-                final cur = MockStore.instance.currentUser.value;
-                final id = cur != null && cur['id'] != null ? cur['id'] : DateTime.now().millisecondsSinceEpoch.toString();
-                MockStore.instance.currentUser.value = {'id': id, 'name': newName, 'email': newEmail};
-
-                Navigator.of(context).pop();
+            onPressed: () async {
+              if (!(_editFormKey.currentState?.validate() ?? false)) return;
+              final newName = _nameController.text.trim();
+              final newEmail = _emailController.text.trim();
+              // Fetch existing user to preserve password when only name changes
+              final existing = await LocalDb.instance.getUserByEmail(_email);
+              final preservedPassword = existing?['password'] ?? '';
+              final preservedAddress = existing?['address'] ?? (MockStore.instance.currentUser.value?['address'] ?? '');
+              final preservedCreated = existing?['created_at'] ?? MockStore.instance.currentUser.value?['created_at'] ?? DateTime.now().toIso8601String();
+              // Build map for upsert (will update by email)
+              final userMap = {
+                'name': newName,
+                'email': newEmail,
+                'password': preservedPassword,
+                'address': preservedAddress,
+                'created_at': preservedCreated,
+              };
+              try {
+                await LocalDb.instance.upsertUser(userMap);
+                final refreshed = await LocalDb.instance.getUserByEmail(newEmail);
+                if (refreshed != null) {
+                  MockStore.instance.currentUser.value = refreshed;
+                  setState(() {
+                    _name = refreshed['name']?.toString() ?? newName;
+                    _email = refreshed['email']?.toString() ?? newEmail;
+                  });
+                }
+                if (mounted) Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil berhasil diperbarui')));
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
               }
             },
             child: const Text('Simpan'),
