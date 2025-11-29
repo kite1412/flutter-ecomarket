@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/mock_store.dart';
+import '../services/local_db.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -23,21 +24,50 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final email = _emailCtrl.text.trim();
     final pass = _passCtrl.text.trim();
 
     if (_isLogin) {
-      final ok = MockStore.instance.login(email: email, password: pass);
-      if (!ok) {
+      // Local DB: verify user by email and password
+      final userRow = await LocalDb.instance.getUserByEmail(email);
+      if (userRow == null || (userRow['password']?.toString() ?? '') != pass) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login gagal — cek email & password')));
+        return;
       }
+      // Sync mock store current user
+      MockStore.instance.currentUser.value = {
+        'id': userRow['id'],
+        'email': userRow['email'],
+        'name': userRow['name'] ?? '',
+        'address': userRow['address'] ?? '',
+      };
     } else {
       final name = _nameCtrl.text.trim();
-      final ok = MockStore.instance.register(name: name, email: email, password: pass);
-      if (!ok) {
+      // Local DB: check existing and insert
+      final existing = await LocalDb.instance.getUserByEmail(email);
+      if (existing != null) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email sudah terdaftar')));
+        return;
+      }
+      final nowIso = DateTime.now().toIso8601String();
+      await LocalDb.instance.upsertUser({
+        'name': name,
+        'email': email,
+        'password': pass, // NOTE: plaintext for demo; hash in production
+        'address': '',
+        'created_at': nowIso,
+      });
+      // Set current user
+      final created = await LocalDb.instance.getUserByEmail(email);
+      if (created != null) {
+        MockStore.instance.currentUser.value = {
+          'id': created['id'],
+          'email': created['email'],
+          'name': created['name'] ?? '',
+          'address': created['address'] ?? '',
+        };
       }
     }
   }

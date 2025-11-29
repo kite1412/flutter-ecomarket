@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'widgets/main_navigator.dart';
 import 'services/mock_store.dart';
 import 'screens/auth_screen.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
 
 void main() {
   runApp(const MainApp());

@@ -34,5 +34,13 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+    <script>
+      // Register sqflite web worker (required by sqflite_common_ffi_web)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sqflite_sw.js').catch(function(e){
+          console.warn('sqflite service worker registration failed', e);
+        });
+      }
+    </script>
 </body>
 </html>
