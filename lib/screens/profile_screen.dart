@@ -197,20 +197,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final int? userId = current != null && current['id'] is int ? current['id'] as int : null;
 
     final allItems = await LocalDb.instance.listItems();
+    // Fetch all transactions to account for bought trash quantities
+    final allTx = await LocalDb.instance.listTransactions();
+    final Map<int, int> purchasedQtyByItem = {};
+    for (final tx in allTx) {
+      final itemId = tx['item_id'];
+      final qty = tx['quantity'];
+      if (itemId is int) {
+        final addQty = (qty is int) ? qty : int.tryParse(qty?.toString() ?? '') ?? 1;
+        purchasedQtyByItem[itemId] = (purchasedQtyByItem[itemId] ?? 0) + addQty;
+      }
+    }
     final myItems = userId != null ? await LocalDb.instance.listItems(userId: userId) : <Map<String, dynamic>>[];
 
     double totalAllKg = 0.0;
     for (final it in allItems) {
       final w = it.containsKey('weight_kg') ? _asDouble(it['weight_kg']) : _asDouble(it['weight']);
       final q = _asInt(it['quantity']);
-      totalAllKg += (w * (q <= 0 ? 1 : q));
+      final itemId = it['id'];
+      int purchased = 0;
+      if (itemId is int && purchasedQtyByItem.containsKey(itemId)) {
+        purchased = purchasedQtyByItem[itemId]!;
+      }
+      // Total weight counts both remaining quantity and purchased quantity
+      final effectiveQty = (q <= 0 ? 0 : q) + purchased;
+      totalAllKg += (w * (effectiveQty <= 0 ? 1 : effectiveQty));
     }
 
     double totalMyKg = 0.0;
     for (final it in myItems) {
       final w = it.containsKey('weight_kg') ? _asDouble(it['weight_kg']) : _asDouble(it['weight']);
       final q = _asInt(it['quantity']);
-      totalMyKg += (w * (q <= 0 ? 1 : q));
+      final itemId = it['id'];
+      int purchased = 0;
+      if (itemId is int && purchasedQtyByItem.containsKey(itemId)) {
+        purchased = purchasedQtyByItem[itemId]!;
+      }
+      final effectiveQty = (q <= 0 ? 0 : q) + purchased;
+      totalMyKg += (w * (effectiveQty <= 0 ? 1 : effectiveQty));
     }
 
     return {
@@ -322,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Expanded(
                           child: _buildStatCard(
                             _fmtWeight(allKg),
-                            'Sampah terkait',
+                            'Total Sampah',
                             Icons.recycling,
                           ),
                         ),
@@ -414,7 +438,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Selesaikan 5 misi untuk unlock',
+                            'Jual sampahmu & dapatkan nilai lebih',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 14,
@@ -423,7 +447,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'Bonus poin khusus menanti!',
+                            'Listing lebih banyak item hari ini untuk dampak hijau!',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 12,

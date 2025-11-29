@@ -24,7 +24,7 @@ class LocalDb {
     final path = p.join(dbPath, 'ecomarket.db');
     return openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (Database db, int version) async {
         await db.execute('''
         CREATE TABLE users (
@@ -59,6 +59,7 @@ class LocalDb {
           buyer_id INTEGER,
           item_id INTEGER,
           price REAL,
+          quantity INTEGER DEFAULT 1,
           status TEXT DEFAULT 'completed' CHECK(status IN ('pending','process','completed','dibayar')),
           created_at TEXT,
           FOREIGN KEY(buyer_id) REFERENCES users(id),
@@ -121,6 +122,7 @@ class LocalDb {
               buyer_id INTEGER,
               item_id INTEGER,
               price REAL,
+              quantity INTEGER DEFAULT 1,
               status TEXT DEFAULT 'completed' CHECK(status IN ('pending','process','completed','dibayar')),
               created_at TEXT,
               FOREIGN KEY(buyer_id) REFERENCES users(id),
@@ -164,6 +166,7 @@ class LocalDb {
                 buyer_id INTEGER,
                 item_id INTEGER,
                 price REAL,
+                quantity INTEGER DEFAULT 1,
                 status TEXT DEFAULT 'completed' CHECK(status IN ('pending','process','completed','dibayar')),
                 created_at TEXT,
                 FOREIGN KEY(buyer_id) REFERENCES users(id),
@@ -173,8 +176,8 @@ class LocalDb {
               final hasOld = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions_old'");
               if (hasOld.isNotEmpty) {
                 await db.execute('''
-                INSERT INTO transactions (id,buyer_id,item_id,price,status,created_at)
-                SELECT id,buyer_id,item_id,price,
+                INSERT INTO transactions (id,buyer_id,item_id,price,quantity,status,created_at)
+                SELECT id,buyer_id,item_id,price,1,
                   CASE
                     WHEN lower(status) IN ('pending','process','completed') THEN lower(status)
                     WHEN lower(status) = 'dibayar' THEN 'completed'
@@ -186,6 +189,10 @@ class LocalDb {
                 await db.execute('DROP TABLE transactions_old');
               }
             } catch (_) {}
+        }
+        if (oldVersion < 7) {
+          // Add quantity column if missing (safety in case previous migration path differed)
+          try { await db.execute('ALTER TABLE transactions ADD COLUMN quantity INTEGER DEFAULT 1'); } catch (_) {}
         }
       },
     );
@@ -288,6 +295,9 @@ class LocalDb {
     }
     if (!(toInsert.containsKey('created_at')) || (toInsert['created_at']?.toString().isEmpty ?? true)) {
       toInsert['created_at'] = nowIso;
+    }
+    if (!(toInsert.containsKey('quantity'))) {
+      toInsert['quantity'] = 1;
     }
     // Normalize legacy value 'dibayar' to 'completed'
     if (toInsert['status'] == 'dibayar') {
