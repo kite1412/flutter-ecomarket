@@ -329,7 +329,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     return FutureBuilder<List<Map<String, dynamic>>>(
                       future: LocalDb.instance.listItems(),
                       builder: (context, snap) {
-                        final products = snap.data ?? [];
+                        var products = snap.data ?? [];
+                        // Merge in-memory updates (e.g., images or recent edits) from MockStore
+                        final memory = MockStore.instance.products.value;
+                        products = products.map((dbItem) {
+                          final match = memory.firstWhere(
+                            (m) => m['id'] == dbItem['id'],
+                            orElse: () => const {},
+                          );
+                          return {...dbItem, ...match};
+                        }).toList();
                         if (snap.connectionState == ConnectionState.waiting) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 24),
@@ -368,6 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: p['title'] ?? '',
                                 price: formatRupiah(p['price']),
                                 subtitle: (p['category'] != null ? '${p['category']}' : '') + (p['condition'] != null ? ' · ${p['condition']}' : ''),
+                                quantity: p['quantity'] is int ? p['quantity'] as int : int.tryParse(p['quantity']?.toString() ?? '') ?? 1,
                               ),
                             );
                           },

@@ -14,6 +14,15 @@ class MockStore {
     products.value = copy;
   }
 
+  void updateProduct(int id, Map<String, dynamic> fields) {
+    final copy = List<Map<String, dynamic>>.from(products.value);
+    final idx = copy.indexWhere((p) => p['id'] == id);
+    if (idx != -1) {
+      copy[idx] = {...copy[idx], ...fields};
+      products.value = copy;
+    }
+  }
+
   // Simple in-memory orders list
   final ValueNotifier<List<Map<String, dynamic>>> orders =
       ValueNotifier<List<Map<String, dynamic>>>([]);

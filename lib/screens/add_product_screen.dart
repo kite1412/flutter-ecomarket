@@ -4,7 +4,8 @@ import '../services/mock_store.dart';
 import '../services/local_db.dart';
 
 class AddProductScreen extends StatefulWidget {
-  const AddProductScreen({super.key});
+  final Map<String, dynamic>? product; // optional existing product for edit
+  const AddProductScreen({Key? key, this.product}) : super(key: key);
 
   @override
   State<AddProductScreen> createState() => _AddProductScreenState();
@@ -22,6 +23,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String? _selectedCategory;
   final List<String> _categories = ['Plastik', 'Kertas', 'Elektronik', 'Logam'];
   String? _selectedCondition;
+  bool get _isEditing => widget.product != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefill controllers if editing
+    final existing = widget.product;
+    if (existing != null) {
+      _nameController.text = existing['title']?.toString() ?? '';
+      _descriptionController.text = existing['description']?.toString() ?? '';
+      _weightController.text = (existing['weight_kg']?.toString() ?? existing['weight']?.toString() ?? '');
+      _quantityController.text = existing['quantity']?.toString() ?? '1';
+      _priceController.text = existing['price']?.toString() ?? '';
+      _selectedCategory = existing['category']?.toString();
+      _selectedCondition = existing['condition']?.toString();
+      final imgs = existing['images'];
+      if (imgs is List && imgs.isNotEmpty) {
+        _imageUrl = imgs.first?.toString();
+      }
+    }
+  }
+
   final List<String> _conditions = [
     'Baru',
     'Sangat bagus',
@@ -45,8 +68,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   void _addImage(int index) {
-    // Simulasi pemilihan gambar
-    // Dalam implementasi nyata, gunakan image_picker package
+    // Simulasi pemilihan gambar (placeholder)
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Upload satu foto (opsional) akan ditambahkan nanti'),
@@ -58,30 +80,59 @@ class _AddProductScreenState extends State<AddProductScreen> {
   // Location section removed
 
   Future<void> _submitForm() async {
-    if (_formKey.currentState!.validate()) {
-      final nowIso = DateTime.now().toIso8601String();
-      final item = {
-        'user_id': MockStore.instance.currentUser.value?['id'],
-        'title': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'category': _selectedCategory ?? 'Plastik',
-        'condition': _selectedCondition ?? 'Bagus',
-        'weight_kg': double.tryParse(_weightController.text.trim()) ?? 0,
-        'quantity': int.tryParse(_quantityController.text.trim()) ?? 1,
-        'price': double.tryParse(_priceController.text.trim()) ?? 0,
-        'status': 'available',
-        'created_at': nowIso,
-      };
-
-      try {
-        final itemId = await LocalDb.instance.insertItem(item);
+    if (!_formKey.currentState!.validate()) return;
+    final baseFields = {
+      'title': _nameController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'category': _selectedCategory ?? 'Plastik',
+      'condition': _selectedCondition ?? 'Bagus',
+      'weight_kg': double.tryParse(_weightController.text.trim()) ?? 0,
+      'quantity': int.tryParse(_quantityController.text.trim()) ?? 1,
+      'price': double.tryParse(_priceController.text.trim()) ?? 0,
+    };
+    try {
+      if (_isEditing) {
+        final id = widget.product?['id'];
+        if (id is int) {
+          await LocalDb.instance.updateItem(id, baseFields);
+          MockStore.instance.updateProduct(id, baseFields);
+          if (_imageUrl != null) {
+            MockStore.instance.updateProduct(id, {'images': [_imageUrl]});
+          }
+        }
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Tersimpan'),
+            content: const Text('Perubahan produk berhasil disimpan.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        final nowIso = DateTime.now().toIso8601String();
+        final newItem = {
+          'user_id': MockStore.instance.currentUser.value?['id'],
+          ...baseFields,
+          'status': 'available',
+          'created_at': nowIso,
+        };
+        final itemId = await LocalDb.instance.insertItem(newItem);
         final localProduct = {
           'id': itemId,
-          ...item,
+          ...newItem,
           'images': _imageUrl != null ? [_imageUrl] : [],
         };
         MockStore.instance.addProduct(localProduct);
-
+        if (!mounted) return;
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -98,11 +149,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ],
           ),
         );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan produk: $e')),
-        );
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan produk: $e')),
+      );
     }
   }
 
@@ -131,10 +183,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                         onPressed: () => Navigator.pop(context),
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Jual Sampah',
-                          style: TextStyle(
+                          _isEditing ? 'Edit Produk' : 'Jual Sampah',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -574,9 +626,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             ),
                             elevation: 0,
                           ),
-                          child: const Text(
-                            'Posting Iklan',
-                            style: TextStyle(
+                          child: Text(
+                            _isEditing ? 'Simpan Perubahan' : 'Posting Iklan',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),

@@ -159,6 +159,17 @@ class LocalDb {
     return rows.isNotEmpty ? rows.first : null;
   }
 
+  Future<Map<String, dynamic>?> getUserById(int id) async {
+    final database = await db;
+    final rows = await database.query('users', where: 'id = ?', whereArgs: [id], limit: 1);
+    return rows.isNotEmpty ? rows.first : null;
+  }
+
+  Future<int> updateUser(int id, Map<String, dynamic> fields) async {
+    final database = await db;
+    return database.update('users', fields, where: 'id = ?', whereArgs: [id]);
+  }
+
   // Items
   Future<int> insertItem(Map<String, dynamic> item) async {
     final database = await db;

@@ -2,11 +2,51 @@ import 'package:flutter/material.dart';
 import '../services/mock_store.dart';
 import '../services/local_db.dart';
 import '../widgets/product_card.dart';
+import 'add_product_screen.dart';
 import '../utils/format.dart';
 
-class ProductDetailScreen extends StatelessWidget {
+class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
   const ProductDetailScreen({super.key, required this.product});
+
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  late Map<String, dynamic> product;
+
+  @override
+  void initState() {
+    super.initState();
+    product = Map<String, dynamic>.from(widget.product);
+    // listen for product updates in MockStore and refresh by id
+    MockStore.instance.products.addListener(_onProductsChanged);
+  }
+
+  void _onProductsChanged() {
+    final id = product['id'];
+    if (id == null) return;
+    // Prefer DB as source of truth after edits
+    _refreshFromDb(id);
+  }
+
+  Future<void> _refreshFromDb(int id) async {
+    try {
+      final row = await LocalDb.instance.getItem(id);
+      if (row != null && mounted) {
+        setState(() {
+          product = {...product, ...row};
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    MockStore.instance.products.removeListener(_onProductsChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,14 +59,34 @@ class ProductDetailScreen extends StatelessWidget {
     final description = product['description'] ?? '';
     final category = product['category']?.toString() ?? '';
     final condition = product['condition']?.toString() ?? '';
-    final status = product['status']?.toString() ?? '';
+    final rawStatus = product['status']?.toString() ?? '';
+    String mapStatus(String s) {
+      switch (s) {
+        case 'available':
+          return 'Tersedia';
+        case 'sold_out':
+          return 'Habis';
+        case 'reserved':
+          return 'Dipesan';
+        case 'pending':
+          return 'Menunggu';
+        default:
+          return s
+              .replaceAll('_', ' ')
+              .split(' ')
+              .where((e) => e.isNotEmpty)
+              .map((e) => e[0].toUpperCase() + e.substring(1))
+              .join(' ');
+      }
+    }
+    final status = mapStatus(rawStatus);
     final createdAtRaw = product['created_at']?.toString();
     DateTime? createdAt; 
     if (createdAtRaw != null) {
       try { createdAt = DateTime.parse(createdAtRaw); } catch (_) {}
     }
     final createdAtStr = createdAt != null ? '${createdAt.day.toString().padLeft(2,'0')}/${createdAt.month.toString().padLeft(2,'0')}/${createdAt.year}' : '-';
-    final address = product['address']?.toString() ?? '';
+    final userId = product['user_id'];
 
     return Scaffold(
       appBar: AppBar(
@@ -134,55 +194,79 @@ class ProductDetailScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(description, style: TextStyle(color: Colors.grey[700], height: 1.4)),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 18),
-                      const SizedBox(width: 6),
-                      Expanded(child: Text(address)),
-                    ],
-                  ),
+                  if (userId is int)
+                    FutureBuilder<Map<String, dynamic>?>(
+                      future: LocalDb.instance.getUserById(userId),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return const SizedBox();
+                        }
+                        final addr = snapshot.data?['address']?.toString().trim() ?? '';
+                        if (addr.isEmpty) return const SizedBox();
+                        return Row(
+                          children: [
+                            const Icon(Icons.location_on_outlined, size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text(addr)),
+                          ],
+                        );
+                      },
+                    ),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green[700],
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CheckoutScreen(product: product),
+                  Builder(
+                    builder: (context) {
+                      final currentUserId = MockStore.instance.currentUser.value?['id'];
+                      final ownerId = product['user_id'];
+                      final isOwner = currentUserId != null && ownerId != null && currentUserId == ownerId;
+                      if (isOwner) {
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue[700],
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => AddProductScreen(product: product),
+                                    ),
+                                  );
+                                  final id = product['id'];
+                                  if (id is int) {
+                                    await _refreshFromDb(id);
+                                  }
+                                },
+                                child: const Text('Edit Produk', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                               ),
-                            );
-                          },
-                          child: const Text('Checkout', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton(
-                        onPressed: () {
-                          // Simple quick buy: create order and return
-                          final order = {
-                            'orderId': '#ORD${DateTime.now().millisecondsSinceEpoch % 100000}',
-                            'storeName': title,
-                            'date': DateTime.now().toIso8601String(),
-                            'weight': weight?.toString() ?? '',
-                            'status': 'Menunggu',
-                            'statusColor': Colors.orange[700]!.value,
-                            'price': formatRupiah(price),
-                            'icon': Icons.recycling.codePoint,
-                            'iconBg': Colors.orange[100]!.value,
-                            'iconColor': Colors.orange[700]!.value,
-                          };
-                          MockStore.instance.addOrder(order);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pesanan berhasil dibuat (mock)')));
-                        },
-                        child: const Text('Beli Cepat'),
-                      ),
-                    ],
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green[700],
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => CheckoutScreen(product: product),
+                                  ),
+                                );
+                              },
+                              child: const Text('Checkout', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -372,6 +456,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       final newQty = stock - _quantity;
                       if (newQty >= 0) {
                         await _db.updateItem(id, {
+                          'quantity': newQty,
+                          if (newQty == 0) 'status': 'sold_out',
+                        });
+                        // Also reflect in in-memory store to refresh all product cards
+                        MockStore.instance.updateProduct(id, {
                           'quantity': newQty,
                           if (newQty == 0) 'status': 'sold_out',
                         });
