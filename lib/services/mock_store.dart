@@ -27,4 +27,42 @@ class MockStore {
   void clear() {
     products.value = [];
   }
+
+  // Simple auth simulation
+  final ValueNotifier<Map<String, dynamic>?> currentUser =
+      ValueNotifier<Map<String, dynamic>?>(null);
+
+  // Registered users (in-memory)
+  final List<Map<String, dynamic>> _registeredUsers = [];
+
+  /// Register a new user (in-memory). Returns true on success, false if email exists.
+  bool register({required String name, required String email, required String password}) {
+    final exists = _registeredUsers.any((u) => u['email'] == email);
+    if (exists) return false;
+    final user = {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'name': name,
+      'email': email,
+      'password': password, // store plain for mock only
+    };
+    _registeredUsers.add(user);
+    currentUser.value = {'id': user['id'], 'name': name, 'email': email};
+    return true;
+  }
+
+  /// Login with email/password. Returns true on success.
+  bool login({required String email, required String password}) {
+    final user = _registeredUsers.firstWhere(
+      (u) => u['email'] == email && u['password'] == password,
+      orElse: () => {},
+    );
+    if (user.isEmpty) return false;
+    currentUser.value = {'id': user['id'], 'name': user['name'], 'email': user['email']};
+    return true;
+  }
+
+  /// Sign out current user
+  void signOut() {
+    currentUser.value = null;
+  }
 }

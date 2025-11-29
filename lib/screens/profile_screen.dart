@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/mock_store.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -19,7 +20,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    MockStore.instance.currentUser.removeListener(_onUserChanged);
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // initialize from mock store if available and listen for changes
+    final user = MockStore.instance.currentUser.value;
+    if (user != null) {
+      _name = (user['name'] ?? _name) as String;
+      _email = (user['email'] ?? _email) as String;
+    }
+    MockStore.instance.currentUser.addListener(_onUserChanged);
+  }
+
+  void _onUserChanged() {
+    final user = MockStore.instance.currentUser.value;
+    setState(() {
+      if (user == null) {
+        _name = 'Sidiq Recycling';
+        _email = 'Sidiq@email.com';
+      } else {
+        _name = (user['name'] ?? _name) as String;
+        _email = (user['email'] ?? _email) as String;
+      }
+    });
   }
 
   void _showEditProfileDialog() {
@@ -57,10 +84,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () {
               if (_editFormKey.currentState?.validate() ?? false) {
+                final newName = _nameController.text.trim();
+                final newEmail = _emailController.text.trim();
                 setState(() {
-                  _name = _nameController.text.trim();
-                  _email = _emailController.text.trim();
+                  _name = newName;
+                  _email = newEmail;
                 });
+
+                // update mock current user while preserving id if present
+                final cur = MockStore.instance.currentUser.value;
+                final id = cur != null && cur['id'] != null ? cur['id'] : DateTime.now().millisecondsSinceEpoch.toString();
+                MockStore.instance.currentUser.value = {'id': id, 'name': newName, 'email': newEmail};
+
                 Navigator.of(context).pop();
               }
             },
@@ -331,6 +366,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       iconColor: Colors.red[700]!,
                       iconBg: Colors.red[50]!,
                       showArrow: false,
+                      onTap: () {
+                        // sign out from mock store
+                        MockStore.instance.signOut();
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda telah keluar')));
+                      },
                     ),
                   ],
                 ),
@@ -394,6 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required Color iconColor,
     required Color iconBg,
     bool showArrow = true,
+    VoidCallback? onTap,
   }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -437,7 +478,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ],
       ),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 

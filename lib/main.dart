@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'widgets/main_navigator.dart';
+import 'services/mock_store.dart';
+import 'screens/auth_screen.dart';
 
 void main() {
   runApp(const MainApp());
@@ -21,7 +23,13 @@ class MainApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'sans-serif',
       ),
-      home: const MainNavigator(),
+      home: ValueListenableBuilder<Map<String, dynamic>?>(
+        valueListenable: MockStore.instance.currentUser,
+        builder: (context, user, _) {
+          if (user == null) return const AuthScreen();
+          return const MainNavigator();
+        },
+      ),
     );
   }
 }
