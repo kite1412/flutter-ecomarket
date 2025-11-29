@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 
 class ProductCard extends StatelessWidget {
   final String? imageUrl;
@@ -55,20 +56,35 @@ class ProductCard extends StatelessWidget {
                               color: Colors.grey[500],
                             ),
                           )
-                        : Image.asset(
-                            imageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey[300],
-                                child: Icon(
-                                  Icons.image,
-                                  size: 50,
-                                  color: Colors.grey[500],
-                                ),
-                              );
-                            },
-                          ),
+                        : (imageUrl!.startsWith('http')
+                            ? Image.network(
+                                imageUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[300],
+                                    child: Icon(
+                                      Icons.image,
+                                      size: 50,
+                                      color: Colors.grey[500],
+                                    ),
+                                  );
+                                },
+                              )
+                            : Image.file(
+                                File(imageUrl!),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[300],
+                                    child: Icon(
+                                      Icons.image,
+                                      size: 50,
+                                      color: Colors.grey[500],
+                                    ),
+                                  );
+                                },
+                              )),
                   ),
                 ),
                 

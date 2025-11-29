@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/product_card.dart';
+import 'product_detail_screen.dart';
 import '../services/local_db.dart';
 import '../utils/format.dart';
 
@@ -176,11 +177,21 @@ class _CategoryScreenState extends State<CategoryScreen> {
                       itemCount: items.length,
                       itemBuilder: (context, index) {
                         final p = items[index];
-                        return ProductCard(
-                          imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
-                          title: p['title']?.toString() ?? '',
-                          price: formatRupiah(p['price']),
-                          subtitle: (_selectedCategory) + (p['condition'] != null ? ' · ${p['condition']}' : ''),
+                        return InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ProductDetailScreen(product: p),
+                              ),
+                            );
+                          },
+                          child: ProductCard(
+                            imageUrl: (p['images'] is List && (p['images'] as List).isNotEmpty) ? (p['images'] as List).first as String? : null,
+                            title: p['title']?.toString() ?? '',
+                            price: formatRupiah(p['price']),
+                            subtitle: (_selectedCategory) + (p['condition'] != null ? ' · ${p['condition']}' : ''),
+                          ),
                         );
                       },
                     );

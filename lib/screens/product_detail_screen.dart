@@ -4,6 +4,7 @@ import '../services/local_db.dart';
 import '../widgets/product_card.dart';
 import 'add_product_screen.dart';
 import '../utils/format.dart';
+import 'dart:io';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -108,11 +109,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   width: double.infinity,
                   child: imageUrl == null
                       ? const Center(child: Icon(Icons.image, size: 80, color: Colors.grey))
-                      : Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                        ),
+                      : (imageUrl.startsWith('http')
+                          ? Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                            )
+                          : Image.file(
+                              File(imageUrl),
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                            )),
                 ),
                 Positioned(
                   bottom: 12,

@@ -18,7 +18,7 @@ class LocalDb {
     final path = p.join(dbPath, 'ecomarket.db');
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (Database db, int version) async {
         await db.execute('''
         CREATE TABLE users (
@@ -39,6 +39,7 @@ class LocalDb {
           category TEXT,
           condition TEXT,
           weight_kg REAL,
+          image_path TEXT,
           quantity INTEGER DEFAULT 1,
           price REAL,
           status TEXT,
@@ -138,6 +139,12 @@ class LocalDb {
             }
           } catch (_) {}
         }
+        if (oldVersion < 5) {
+          // Add image_path column to items
+          try {
+            await db.execute('ALTER TABLE items ADD COLUMN image_path TEXT');
+          } catch (_) {}
+        }
       },
     );
   }
@@ -179,7 +186,14 @@ class LocalDb {
   Future<Map<String, dynamic>?> getItem(int id) async {
     final database = await db;
     final rows = await database.query('items', where: 'id = ?', whereArgs: [id], limit: 1);
-    return rows.isNotEmpty ? rows.first : null;
+    if (rows.isEmpty) return null;
+    final row = Map<String, dynamic>.from(rows.first);
+    // Surface images list for UI compatibility
+    final img = row['image_path'];
+    if (img != null && (img as Object).toString().isNotEmpty) {
+      row['images'] = [img.toString()];
+    }
+    return row;
   }
 
   Future<List<Map<String, dynamic>>> listItems({int? userId, String? status}) async {
@@ -194,7 +208,16 @@ class LocalDb {
       where = (where == null) ? 'status = ?' : '$where AND status = ?';
       whereArgs.add(status);
     }
-    return database.query('items', where: where, whereArgs: whereArgs, orderBy: 'created_at DESC');
+    final rows = await database.query('items', where: where, whereArgs: whereArgs, orderBy: 'created_at DESC');
+    // Map image_path -> images list to keep UI simple
+    return rows.map((r) {
+      final row = Map<String, dynamic>.from(r);
+      final img = row['image_path'];
+      if (img != null && (img as Object).toString().isNotEmpty) {
+        row['images'] = [img.toString()];
+      }
+      return row;
+    }).toList();
   }
 
   Future<int> updateItem(int id, Map<String, dynamic> fields) async {

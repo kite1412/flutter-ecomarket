@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../services/mock_store.dart';
 import '../services/local_db.dart';
 
@@ -41,6 +43,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
       final imgs = existing['images'];
       if (imgs is List && imgs.isNotEmpty) {
         _imageUrl = imgs.first?.toString();
+      } else if (existing['image_path'] != null) {
+        _imageUrl = existing['image_path']?.toString();
       }
     }
   }
@@ -67,14 +71,18 @@ class _AddProductScreenState extends State<AddProductScreen> {
     super.dispose();
   }
 
-  void _addImage(int index) {
-    // Simulasi pemilihan gambar (placeholder)
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Upload satu foto (opsional) akan ditambahkan nanti'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+  Future<void> _addImage(int index) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1280, maxHeight: 1280, imageQuality: 85);
+      if (picked != null) {
+        setState(() {
+          _imageUrl = picked.path; // store local file path
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memilih gambar: $e')));
+    }
   }
 
   // Location section removed
@@ -94,7 +102,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
       if (_isEditing) {
         final id = widget.product?['id'];
         if (id is int) {
-          await LocalDb.instance.updateItem(id, baseFields);
+          await LocalDb.instance.updateItem(id, {
+            ...baseFields,
+            if (_imageUrl != null) 'image_path': _imageUrl,
+          });
           MockStore.instance.updateProduct(id, baseFields);
           if (_imageUrl != null) {
             MockStore.instance.updateProduct(id, {'images': [_imageUrl]});
@@ -122,6 +133,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         final newItem = {
           'user_id': MockStore.instance.currentUser.value?['id'],
           ...baseFields,
+          'image_path': _imageUrl,
           'status': 'available',
           'created_at': nowIso,
         };
@@ -699,12 +711,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      _imageUrl!,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                    ),
+                    child: _imageUrl != null && _imageUrl!.startsWith('http')
+                        ? Image.network(
+                            _imageUrl!,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.file(
+                            File(_imageUrl!),
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                   Positioned(
                     top: 4,
