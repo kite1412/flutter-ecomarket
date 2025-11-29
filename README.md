@@ -1,4 +1,4 @@
-# 📱 EcoMarket - Aplikasi Jual Beli Sampah
+<!-- # 📱 EcoMarket - Aplikasi Jual Beli Sampah
 
 Aplikasi mobile berbasis Flutter untuk marketplace jual beli sampah daur ulang dengan fitur lengkap untuk memudahkan pengguna menjual sampah mereka.
 
@@ -221,4 +221,4 @@ Dibuat dengan ❤️ menggunakan Flutter
 
 ---
 
-**Note**: Aplikasi ini menggunakan simulasi untuk fitur upload foto dan lokasi. Untuk implementasi production, tambahkan package yang disebutkan di bagian Dependencies.
+**Note**: Aplikasi ini menggunakan simulasi untuk fitur upload foto dan lokasi. Untuk implementasi production, tambahkan package yang disebutkan di bagian Dependencies. -->
